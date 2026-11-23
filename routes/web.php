@@ -5,7 +5,14 @@ use Inertia\Inertia;
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\RegisteredUserController;
+use App\Http\Controllers\Inventory\InventoryController;
+use App\Http\Controllers\Inventory\StockOverviewController;
 use App\Http\Controllers\MasterData\CategoryController;
+use App\Http\Controllers\MasterData\CustomerController;
+use App\Http\Controllers\MasterData\ProductController;
+use App\Http\Controllers\MasterData\SupplierController;
+use App\Http\Controllers\MasterData\UnitController;
+use App\Http\Controllers\MasterData\WarehouseController;
 use App\Http\Middleware\JwtAuthenticate;
 
 // Routes sebelum login
@@ -47,7 +54,31 @@ Route::middleware([JwtAuthenticate::class])->group(function () {
 
         Route::delete('/categories/{category}', [CategoryController::class, 'destroy'])
             ->name('categories.destroy');
+
+        Route::resource('units', UnitController::class)
+            ->only(['index', 'store', 'update', 'destroy']);
+
+        Route::resource('suppliers', SupplierController::class)
+            ->only(['index', 'store', 'update', 'destroy']);
+
+        Route::resource('warehouses', WarehouseController::class)
+            ->only(['index', 'store', 'update', 'destroy']);
+
+        Route::resource('customers', CustomerController::class)
+            ->only(['index', 'store', 'update', 'destroy']);
+
+        Route::resource('products', ProductController::class)
+            ->only(['index', 'store', 'update', 'destroy']);
     });
+
+    Route::get('/inventory', [InventoryController::class, 'index'])
+        ->name('inventory.index');
+
+    Route::post('/inventory', [InventoryController::class, 'store'])
+        ->name('inventory.store');
+
+    Route::get('/inventory/overview', [StockOverviewController::class, 'index'])
+        ->name('inventory.overview');
 
     Route::post('/logout', [
         AuthenticatedSessionController::class,

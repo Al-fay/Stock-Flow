@@ -20,7 +20,6 @@ class Product extends Model
         'description',
         'purchase_price',
         'selling_price',
-        'stock',
         'minimum_stock',
         'is_active',
     ];

@@ -5,7 +5,7 @@ import type {
     PaginationState,
     SortingState,
 } from "@tanstack/react-table";
-import { Plus, Pencil, Trash2, Tags, X } from "lucide-react";
+import { Plus, Pencil, Trash2, X } from "lucide-react";
 import { DataTable } from "@/components/master-data/data-table";
 import type { PaginatedData } from "@/types/master-data";
 import { Switch } from "@/components/ui/switch";
@@ -287,7 +287,6 @@ export default function CategoryIndex({
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <div className="flex items-center gap-2">
-                                <Tags className="size-5 text-primary" />
                                 <h1 className="text-2xl font-semibold tracking-tight">
                                     Kategori Produk
                                 </h1>

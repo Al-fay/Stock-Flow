@@ -23,6 +23,8 @@ import {
     Settings2,
     Palette,
     HelpCircle,
+    Ruler,
+    ArrowLeftRight,
 } from "lucide-react";
 import {
     DropdownMenu,
@@ -51,6 +53,16 @@ const navigation = [
         title: "Management",
         items: [
             {
+                label: "Stock Overview",
+                href: "/inventory/overview",
+                icon: LayoutDashboard,
+            },
+            {
+                label: "Inventory",
+                href: "/inventory",
+                icon: ArrowLeftRight,
+            },
+            {
                 label: "Products",
                 href: "/master-data/products",
                 icon: Package,
@@ -60,6 +72,7 @@ const navigation = [
                 href: "/master-data/categories",
                 icon: Tags,
             },
+            { label: "Units", href: "/master-data/units", icon: Ruler },
             {
                 label: "Suppliers",
                 href: "/master-data/suppliers",
