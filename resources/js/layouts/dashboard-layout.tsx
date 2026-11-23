@@ -8,7 +8,6 @@ import {
     Warehouse,
     ShoppingCart,
     BarChart3,
-    Settings,
     Search,
     Bell,
     Menu,
@@ -20,11 +19,11 @@ import {
     Monitor,
     ChevronUp,
     UserRound,
-    Settings2,
-    Palette,
     HelpCircle,
-    Ruler,
     ArrowLeftRight,
+    Info,
+    Check,
+    Ruler,
 } from "lucide-react";
 import {
     DropdownMenu,
@@ -92,10 +91,7 @@ const navigation = [
     },
     {
         title: "System",
-        items: [
-            { label: "Reports", href: "/reports", icon: BarChart3 },
-            { label: "Settings", href: "/settings", icon: Settings },
-        ],
+        items: [{ label: "Reports", href: "/reports", icon: BarChart3 }],
     },
 ];
 
@@ -110,6 +106,7 @@ export default function DashboardLayout({
     const [mobileOpen, setMobileOpen] = useState(false);
     const [theme, setTheme] = useState<Theme>("system");
     const [mounted, setMounted] = useState(false);
+    const [showNotifications, setShowNotifications] = useState(false);
 
     // Initialize saved theme
     useEffect(() => {
@@ -360,13 +357,6 @@ export default function DashboardLayout({
                                     <UserRound className="mr-2 size-4" />
                                     My Profile
                                 </DropdownMenuItem>
-
-                                <DropdownMenuItem
-                                    onClick={() => router.visit("/settings")}
-                                >
-                                    <Settings2 className="mr-2 size-4" />
-                                    Account Settings
-                                </DropdownMenuItem>
                             </DropdownMenuGroup>
 
                             <DropdownMenuSeparator />
@@ -499,12 +489,71 @@ export default function DashboardLayout({
 
                         {/* Notifications */}
                         <button
+                            onClick={() =>
+                                setShowNotifications(!showNotifications)
+                            }
                             className="relative flex size-9 items-center justify-center rounded-xl border transition-colors hover:bg-muted"
                             aria-label="Notifications"
                         >
                             <Bell className="size-4" />
                             <span className="absolute right-2 top-2 size-2 rounded-full border-2 border-background bg-red-500" />
                         </button>
+
+                        {showNotifications && (
+                            <div className="absolute right-0 top-12 z-50 w-80 overflow-hidden rounded-xl border bg-background shadow-xl">
+                                <div className="flex items-center justify-between border-b p-4">
+                                    <h3 className="font-semibold">
+                                        Notifikasi
+                                    </h3>
+                                    <span className="text-xs text-muted-foreground">
+                                        2 baru
+                                    </span>
+                                </div>
+
+                                <div className="divide-y">
+                                    <div className="flex gap-3 p-4 hover:bg-muted/50">
+                                        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                                            <Info size={18} />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-medium">
+                                                Informasi terbaru
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                Ada informasi baru untuk kamu.
+                                            </p>
+                                            <span className="text-xs text-muted-foreground">
+                                                Baru saja
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-3 p-4 hover:bg-muted/50">
+                                        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-600">
+                                            <Check size={18} />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-medium">
+                                                Berhasil disimpan
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                Data berhasil diperbarui.
+                                            </p>
+                                            <span className="text-xs text-muted-foreground">
+                                                5 menit lalu
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={() => setShowNotifications(false)}
+                                    className="w-full border-t p-3 text-center text-sm font-medium hover:bg-muted"
+                                >
+                                    Tutup notifikasi
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </header>
 

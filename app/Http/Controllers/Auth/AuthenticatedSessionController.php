@@ -17,12 +17,22 @@ class AuthenticatedSessionController extends Controller
         $credentials = $request->validate([
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
+            'remember' => ['nullable', 'boolean']
         ]);
 
         $credentials['email'] = strtolower(trim($credentials['email']));
 
+        $remember = $request->boolean('remember');
+
+        $ttl = 15;
+
         try {
-            $token = Auth::guard('api')->attempt($credentials);
+            $token = Auth::guard('api')
+                ->setTTL($ttl)
+                ->attempt([
+                    'email' => $credentials['email'],
+                    'password' => $credentials['password'],
+                ]);
         } catch (JWTException $exception) {
             throw ValidationException::withMessages([
                 'email' => 'Terjadi kesalahan saat login. Silakan coba lagi.',
@@ -35,10 +45,24 @@ class AuthenticatedSessionController extends Controller
             ]);
         }
 
-        $cookie = cookie(
+        $refreshTtl = $remember ? 43200 : 1440;
+
+        $accessCookie = cookie(
             'access_token',
             $token,
-            (int) config('jwt.ttl', 15),
+            $ttl,
+            '/',
+            null,
+            $request->isSecure(),
+            true,
+            false,
+            'lax'
+        );
+
+        $refreshCookie = cookie(
+            'refresh_token',
+            $token,
+            $refreshTtl,
             '/',
             null,
             $request->isSecure(),
@@ -49,7 +73,8 @@ class AuthenticatedSessionController extends Controller
 
         return redirect()
             ->intended(route('dashboard'))
-            ->withCookie($cookie);
+            ->withCookie($accessCookie)
+            ->withCookie($refreshCookie);
     }
 
     public function destroy(Request $request): RedirectResponse

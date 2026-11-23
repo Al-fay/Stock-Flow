@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\Auth\RefreshTokenController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Inventory\InventoryController;
 use App\Http\Controllers\Inventory\StockOverviewController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\MasterData\SupplierController;
 use App\Http\Controllers\MasterData\UnitController;
 use App\Http\Controllers\MasterData\WarehouseController;
 use App\Http\Middleware\JwtAuthenticate;
+use Illuminate\Support\Facades\Auth;
 
 // Routes sebelum login
 Route::middleware('guest')->group(function () {
@@ -41,6 +43,24 @@ Route::middleware([JwtAuthenticate::class])->group(function () {
     Route::get('/dashboard', function () {
         return Inertia::render('dashboard/index');
     })->name('dashboard');
+
+    Route::post('/refresh-token', RefreshTokenController::class)
+        ->middleware('throttle:10,1')
+        ->name('token.refersh');
+
+    Route::get('/profile', function () {
+        $user = Auth::user();
+
+        return Inertia::render('Profile', [
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'email_verified_at' => $user->email_verified_at,
+                'created_at' => $user->created_at,
+            ],
+        ]);
+    })->name('profile');
 
     Route::prefix('master-data')->name('master-data.')->group(function () {
         Route::get('/categories', [CategoryController::class, 'index'])
