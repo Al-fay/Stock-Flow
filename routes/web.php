@@ -6,6 +6,7 @@ use Inertia\Inertia;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\RefreshTokenController;
 use App\Http\Controllers\Auth\RegisteredUserController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Inventory\InventoryController;
 use App\Http\Controllers\Inventory\StockOverviewController;
 use App\Http\Controllers\MasterData\CategoryController;
@@ -19,7 +20,7 @@ use Illuminate\Support\Facades\Auth;
 
 // Routes sebelum login
 Route::middleware('guest')->group(function () {
-    Route::get('/sign-in', function () {
+    Route::get('/', function () {
         return Inertia::render('auth/sign-in');
     })->name('login');
 
@@ -38,15 +39,14 @@ Route::middleware('guest')->group(function () {
     ])->middleware('throttle:3,60');
 });
 
+Route::post('/refresh-token', RefreshTokenController::class)
+    ->middleware('throttle:10,1')
+    ->name('token.refresh');
+
 // Routes setelah login
 Route::middleware([JwtAuthenticate::class])->group(function () {
-    Route::get('/dashboard', function () {
-        return Inertia::render('dashboard/index');
-    })->name('dashboard');
-
-    Route::post('/refresh-token', RefreshTokenController::class)
-        ->middleware('throttle:10,1')
-        ->name('token.refersh');
+    Route::get('/dashboard', [DashboardController::class, 'index'])
+        ->name('dashboard');
 
     Route::get('/profile', function () {
         $user = Auth::user();
@@ -72,20 +72,38 @@ Route::middleware([JwtAuthenticate::class])->group(function () {
         Route::put('/categories/{category}', [CategoryController::class, 'update'])
             ->name('categories.update');
 
+        Route::patch('/categories/{category}/status', [CategoryController::class, 'updateStatus'])
+            ->name('categories.update-status');
+
         Route::delete('/categories/{category}', [CategoryController::class, 'destroy'])
             ->name('categories.destroy');
+
+        Route::patch('/units/{unit}/status', [UnitController::class, 'updateStatus'])
+            ->name('units.update-status');
 
         Route::resource('units', UnitController::class)
             ->only(['index', 'store', 'update', 'destroy']);
 
+        Route::patch('suppliers/{supplier}/status', [SupplierController::class, 'updateStatus'])
+            ->name('suppliers.update-status');
+
         Route::resource('suppliers', SupplierController::class)
             ->only(['index', 'store', 'update', 'destroy']);
+
+        Route::patch('warehouses/{warehouse}/status', [WarehouseController::class, 'updateStatus'])
+            ->name('warehouses.update-status');
 
         Route::resource('warehouses', WarehouseController::class)
             ->only(['index', 'store', 'update', 'destroy']);
 
+        Route::patch('customers/{customer}/status', [CustomerController::class, 'updateStatus'])
+            ->name('customers.update-status');
+
         Route::resource('customers', CustomerController::class)
             ->only(['index', 'store', 'update', 'destroy']);
+
+        Route::patch('products/{product}/status', [ProductController::class, 'updateStatus'])
+            ->name('products.update-status');
 
         Route::resource('products', ProductController::class)
             ->only(['index', 'store', 'update', 'destroy']);

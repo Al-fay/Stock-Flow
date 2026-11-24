@@ -9,19 +9,21 @@ import {
 import DashboardLayout from "@/layouts/dashboard-layout";
 import { DataTable } from "@/components/master-data/data-table";
 import { Switch } from "@/components/ui/switch";
+import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/my-components/confirm-dialog";
 
-interface CategoryOption {
+export interface CategoryOption {
     id: number;
     name: string;
 }
 
-interface UnitOption {
+export interface UnitOption {
     id: number;
     name: string;
     symbol: string;
 }
 
-interface Product {
+export interface Product {
     id: number;
     category_id: number | null;
     unit_id: number;
@@ -49,7 +51,7 @@ interface PaginatedData<T> {
     to: number | null;
 }
 
-interface ProductPageProps {
+export interface ProductPageProps {
     products: PaginatedData<Product>;
     categories: CategoryOption[];
     units: UnitOption[];
@@ -61,7 +63,7 @@ interface ProductPageProps {
     };
 }
 
-interface ProductForm {
+export interface ProductForm {
     category_id: string;
     unit_id: string;
     sku: string;
@@ -74,7 +76,7 @@ interface ProductForm {
     is_active: boolean;
 }
 
-const initialForm: ProductForm = {
+export const initialForm: ProductForm = {
     category_id: "",
     unit_id: "",
     sku: "",
@@ -112,6 +114,11 @@ export default function ProductsIndex({
     const [modalOpen, setModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [search, setSearch] = useState(filters.search ?? "");
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deletingProduct, setDeletingProduct] = useState<Product | null>(
+        null,
+    );
+    const [deleteProcessing, setDeleteProcessing] = useState(false);
 
     const form = useForm<ProductForm>(initialForm);
 
@@ -176,12 +183,29 @@ export default function ProductsIndex({
     const submit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
+        const isEditing = !!editingProduct;
+
         const options = {
             preserveScroll: true,
             onSuccess: () => {
+                toast.success(
+                    isEditing ? "Berhasil diperbarui" : "Berhasil ditambahkan",
+                    {
+                        description: isEditing
+                            ? "Data produk berhasil diperbarui."
+                            : "Produk baru berhasil ditambahkan.",
+                    },
+                );
+
                 setModalOpen(false);
                 setEditingProduct(null);
                 form.reset();
+            },
+            onError: () => {
+                toast.error("Gagal menyimpan", {
+                    description:
+                        "Periksa kembali data produk yang kamu masukkan.",
+                });
             },
         };
 
@@ -193,15 +217,57 @@ export default function ProductsIndex({
     };
 
     const deleteProduct = (product: Product) => {
-        const confirmed = window.confirm(
-            `Apakah kamu yakin ingin menghapus produk "${product.name}"?`,
-        );
+        setDeletingProduct(product);
+        setDeleteDialogOpen(true);
+    };
 
-        if (!confirmed) return;
+    const confirmDeleteProduct = () => {
+        if (!deletingProduct) return;
 
-        router.delete(`/master-data/products/${product.id}`, {
+        setDeleteProcessing(true);
+
+        router.delete(`/master-data/products/${deletingProduct.id}`, {
             preserveScroll: true,
+            onSuccess: () => {
+                toast.success("Berhasil dihapus", {
+                    description: `Produk "${deletingProduct.name}" berhasil dihapus.`,
+                });
+
+                setDeleteDialogOpen(false);
+                setDeletingProduct(null);
+            },
+            onError: () => {
+                toast.error("Gagal menghapus", {
+                    description: "Terjadi kesalahan saat menghapus produk.",
+                });
+            },
+            onFinish: () => {
+                setDeleteProcessing(false);
+            },
         });
+    };
+
+    const updateProductStatus = (id: number, is_active: boolean) => {
+        router.patch(
+            `/master-data/products/${id}/status`,
+            { is_active },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    toast.success("Berhasil disimpan", {
+                        description: `Status produk berhasil ${
+                            is_active ? "diaktifkan" : "dinonaktifkan"
+                        }.`,
+                    });
+                },
+                onError: () => {
+                    toast.error("Gagal disimpan", {
+                        description:
+                            "Terjadi kesalahan saat mengubah status produk.",
+                    });
+                },
+            },
+        );
     };
 
     const columns = useMemo<ColumnDef<Product, any>[]>(
@@ -289,7 +355,7 @@ export default function ProductsIndex({
                             </span>
                             {isLow && (
                                 <p className="text-xs text-destructive">
-                                    Stok minimum
+                                    Stok minimum {formatNumber(minimum)}
                                 </p>
                             )}
                         </div>
@@ -301,15 +367,24 @@ export default function ProductsIndex({
                 id: "status",
                 header: "Status",
                 cell: ({ row }) => (
-                    <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
-                            row.original.is_active
-                                ? "bg-primary/10 text-primary"
-                                : "bg-muted text-muted-foreground"
-                        }`}
-                    >
-                        {row.original.is_active ? "Aktif" : "Nonaktif"}
-                    </span>
+                    <div className="flex flex-col items-center gap-1.5 cursor-pointer">
+                        <Switch
+                            checked={row.original.is_active}
+                            onCheckedChange={(checked) => {
+                                updateProductStatus(row.original.id, checked);
+                            }}
+                        />
+
+                        <span
+                            className={`text-xs font-medium ${
+                                row.original.is_active
+                                    ? "text-primary"
+                                    : "text-muted-foreground"
+                            }`}
+                        >
+                            {row.original.is_active ? "Aktif" : "Nonaktif"}
+                        </span>
+                    </div>
                 ),
             }),
 
@@ -729,6 +804,22 @@ export default function ProductsIndex({
                     </div>
                 </div>
             )}
+
+            <ConfirmDialog
+                open={deleteDialogOpen}
+                onOpenChange={setDeleteDialogOpen}
+                onConfirm={confirmDeleteProduct}
+                title="Hapus Produk?"
+                description={
+                    deletingProduct
+                        ? `Apakah kamu yakin ingin menghapus produk "${deletingProduct.name}"? Tindakan ini tidak dapat dibatalkan.`
+                        : "Apakah kamu yakin ingin menghapus produk ini?"
+                }
+                confirmText="Ya, Hapus"
+                cancelText="Batal"
+                loading={deleteProcessing}
+                variant="destructive"
+            />
         </DashboardLayout>
     );
 }

@@ -33,7 +33,7 @@ export default function SignUp() {
                     <>
                         Sudah punya akun?{" "}
                         <Link
-                            href="/sign-in"
+                            href="/"
                             className="font-semibold text-primary hover:underline"
                         >
                             Sign in

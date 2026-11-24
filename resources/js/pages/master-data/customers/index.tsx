@@ -10,6 +10,8 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import DashboardLayout from "@/layouts/dashboard-layout";
 import { DataTable } from "@/components/master-data/data-table";
 import { Switch } from "@/components/ui/switch";
+import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/my-components/confirm-dialog";
 
 interface Customer {
     id: number;
@@ -72,6 +74,11 @@ export default function CustomersIndex({
     const [editingCustomer, setEditingCustomer] = useState<Customer | null>(
         null,
     );
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(
+        null,
+    );
+    const [deleteProcessing, setDeleteProcessing] = useState(false);
 
     const form = useForm<CustomerForm>(initialForm);
 
@@ -125,6 +132,8 @@ export default function CustomersIndex({
     };
 
     const closeModal = () => {
+        if (form.processing) return;
+
         setModalOpen(false);
         setEditingCustomer(null);
         form.reset();
@@ -133,10 +142,30 @@ export default function CustomersIndex({
 
     const submit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        const isEditing = !!editingCustomer;
 
         const options = {
             preserveScroll: true,
-            onSuccess: () => closeModal(),
+            onSuccess: () => {
+                toast.success(
+                    isEditing ? "Berhasil diperbarui" : "Berhasil ditambahkan",
+                    {
+                        description: isEditing
+                            ? "Data pelanggan berhasil diperbarui."
+                            : "Data pelanggan berhasil ditambahkan.",
+                    },
+                );
+
+                setModalOpen(false);
+                setEditingCustomer(null);
+                form.reset();
+            },
+            onError: () => {
+                toast.error("Gagal menyimpan", {
+                    description:
+                        "Periksa kembali data pelanggan yang kamu masukkan.",
+                });
+            },
         };
 
         if (editingCustomer) {
@@ -147,15 +176,57 @@ export default function CustomersIndex({
     };
 
     const deleteCustomer = (customer: Customer) => {
-        const confirmed = window.confirm(
-            `Yakin ingin menghapus pelanggan "${customer.name}"?`,
-        );
+        setDeletingCustomer(customer);
+        setDeleteDialogOpen(true);
+    };
 
-        if (!confirmed) return;
+    const confirmDeleteCategory = () => {
+        if (!deletingCustomer) return;
 
-        router.delete(`/master-data/customers/${customer.id}`, {
+        setDeleteProcessing(true);
+
+        router.delete(`/master-data/customers/${deletingCustomer.id}`, {
             preserveScroll: true,
+            onSuccess: () => {
+                toast.success("Berhasil dihapus", {
+                    description: `Pelanggan "${deletingCustomer.name}" berhasil dihapus.`,
+                });
+
+                setDeleteDialogOpen(false);
+                setDeletingCustomer(null);
+            },
+            onError: () => {
+                toast.error("Gagal menghapus", {
+                    description: "Terjadi kesalahan saat menghapus pelanggan.",
+                });
+            },
+            onFinish: () => {
+                setDeleteProcessing(false);
+            },
         });
+    };
+
+    const updateCustomerStatus = (id: number, is_active: boolean) => {
+        router.patch(
+            `/master-data/customers/${id}/status`,
+            { is_active },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    toast.success("Berhasil disimpan", {
+                        description: `Status pelanggan berhasil ${
+                            is_active ? "diaktifkan" : "dinonaktifkan"
+                        }.`,
+                    });
+                },
+                onError: () => {
+                    toast.error("Gagal disimpan", {
+                        description:
+                            "Terjadi kesalahan saat mengubah status pelanggan.",
+                    });
+                },
+            },
+        );
     };
 
     const handlePaginationChange = (pagination: PaginationState) => {
@@ -241,15 +312,24 @@ export default function CustomersIndex({
             header: "Status",
             enableSorting: false,
             cell: ({ row }) => (
-                <span
-                    className={
-                        row.original.is_active
-                            ? "inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
-                            : "inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground"
-                    }
-                >
-                    {row.original.is_active ? "Aktif" : "Nonaktif"}
-                </span>
+                <div className="flex flex-col items-center gap-1.5 cursor-pointer">
+                    <Switch
+                        checked={row.original.is_active}
+                        onCheckedChange={(checked) => {
+                            updateCustomerStatus(row.original.id, checked);
+                        }}
+                    />
+
+                    <span
+                        className={`text-xs font-medium  ${
+                            row.original.is_active
+                                ? "text-primary"
+                                : "text-muted-foreground"
+                        }`}
+                    >
+                        {row.original.is_active ? "Aktif" : "Nonaktif"}
+                    </span>
+                </div>
             ),
         },
         {
@@ -281,8 +361,8 @@ export default function CustomersIndex({
                     <button
                         type="button"
                         onClick={() => deleteCustomer(row.original)}
-                        className="rounded-lg p-2 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
                         title="Hapus pelanggan"
+                        className="inline-flex size-8 items-center justify-center rounded-md text-destructive transition-colors hover:bg-destructive/10"
                     >
                         <Trash2 className="size-4" />
                     </button>
@@ -506,6 +586,22 @@ export default function CustomersIndex({
                     </div>
                 </div>
             )}
+
+            <ConfirmDialog
+                open={deleteDialogOpen}
+                onOpenChange={setDeleteDialogOpen}
+                onConfirm={confirmDeleteCategory}
+                title="Hapus Pelanggan?"
+                description={
+                    deletingCustomer
+                        ? `Apakah kamu yakin ingin menghapus pelanggan "${deletingCustomer.name}"? Tindakan ini tidak dapat dibatalkan.`
+                        : "Apakah kamu yakin ingin menghapus pelanggan ini?"
+                }
+                confirmText="Ya, Hapus"
+                cancelText="Batal"
+                loading={deleteProcessing}
+                variant="destructive"
+            />
         </DashboardLayout>
     );
 }

@@ -5,6 +5,8 @@ import type { PaginationState, SortingState } from "@tanstack/react-table";
 import DashboardLayout from "@/layouts/dashboard-layout";
 import { Switch } from "@/components/ui/switch";
 import { DataTable } from "@/components/master-data/data-table";
+import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/my-components/confirm-dialog";
 
 interface Unit {
     id: number;
@@ -55,6 +57,9 @@ export default function UnitsIndex({ units, filters }: UnitPageProps) {
     const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
     const [search, setSearch] = useState(filters.search ?? "");
     const [deleteError, setDeleteError] = useState("");
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deletingUnit, setDeletingUnit] = useState<Unit | null>(null);
+    const [deleteProcessing, setDeleteProcessing] = useState(false);
 
     const form = useForm<UnitFormData>({
         code: "",
@@ -131,45 +136,91 @@ export default function UnitsIndex({ units, filters }: UnitPageProps) {
 
     const submit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        const isEditing = !!editingUnit;
+
+        const options = {
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.success(
+                    isEditing ? "Berhasil diperbarui" : "Berhasil ditambahkan",
+                    {
+                        description: isEditing
+                            ? "Data satuan berhasil diperbarui."
+                            : "Data satuan berhasil ditambahkan.",
+                    },
+                );
+
+                setModalOpen(false);
+                setEditingUnit(null);
+                form.reset();
+            },
+            onError: () => {
+                toast.error("Gagal menyimpan", {
+                    description:
+                        "Periksa kembali data satuan yang kamu masukkan.",
+                });
+            },
+        };
 
         if (editingUnit) {
-            form.put(`/master-data/units/${editingUnit.id}`, {
-                preserveScroll: true,
-                onSuccess: () => {
-                    setModalOpen(false);
-                    setEditingUnit(null);
-                    form.reset();
-                },
-            });
+            form.put(`/master-data/units/${editingUnit.id}`, options);
         } else {
-            form.post("/master-data/units", {
-                preserveScroll: true,
-                onSuccess: () => {
-                    setModalOpen(false);
-                    form.reset();
-                },
-            });
+            form.post("/master-data/units", options);
         }
     };
 
     const deleteUnit = (unit: Unit) => {
-        const confirmed = window.confirm(
-            `Apakah Anda yakin ingin menghapus satuan "${unit.name}"?`,
-        );
+        setDeletingUnit(unit);
+        setDeleteDialogOpen(true);
+    };
 
-        if (!confirmed) return;
+    const confirmDeleteCategory = () => {
+        if (!deletingUnit) return;
 
-        setDeleteError("");
+        setDeleteProcessing(true);
 
-        router.delete(`/master-data/units/${unit.id}`, {
+        router.delete(`/master-data/units/${deletingUnit.id}`, {
             preserveScroll: true,
-            onError: (errors) => {
-                setDeleteError(
-                    errors.delete ??
-                        "Satuan gagal dihapus. Periksa apakah satuan masih digunakan oleh produk.",
-                );
+            onSuccess: () => {
+                toast.success("Berhasil dihapus", {
+                    description: `Satuan "${deletingUnit.name}" berhasil dihapus.`,
+                });
+
+                setDeleteDialogOpen(false);
+                setDeletingUnit(null);
+            },
+            onError: () => {
+                toast.error("Gagal menghapus", {
+                    description: "Terjadi kesalahan saat menghapus satuan.",
+                });
+            },
+            onFinish: () => {
+                setDeleteProcessing(false);
             },
         });
+    };
+
+    const updateSatuanStatus = (id: number, is_active: boolean) => {
+        router.patch(
+            `/master-data/units/${id}/status`,
+            { is_active },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    toast.success("Berhasil disimpan", {
+                        description: `Status satuan berhasil ${
+                            is_active ? "diaktifkan" : "dinonaktifkan"
+                        }.`,
+                    });
+                },
+                onError: () => {
+                    toast.error("Gagal disimpan", {
+                        description:
+                            "Terjadi kesalahan saat mengubah status satuan.",
+                    });
+                },
+            },
+        );
     };
 
     const handlePaginationChange = (pagination: PaginationState) => {
@@ -246,15 +297,24 @@ export default function UnitsIndex({ units, filters }: UnitPageProps) {
             accessorKey: "is_active",
             header: "Status",
             cell: ({ row }: any) => (
-                <span
-                    className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-                        row.original.is_active
-                            ? "bg-primary/10 text-primary"
-                            : "bg-muted text-muted-foreground"
-                    }`}
-                >
-                    {row.original.is_active ? "Aktif" : "Nonaktif"}
-                </span>
+                <div className="flex flex-col items-center gap-1.5 cursor-pointer">
+                    <Switch
+                        checked={row.original.is_active}
+                        onCheckedChange={(checked) => {
+                            updateSatuanStatus(row.original.id, checked);
+                        }}
+                    />
+
+                    <span
+                        className={`text-xs font-medium  ${
+                            row.original.is_active
+                                ? "text-primary"
+                                : "text-muted-foreground"
+                        }`}
+                    >
+                        {row.original.is_active ? "Aktif" : "Nonaktif"}
+                    </span>
+                </div>
             ),
         },
         {
@@ -291,8 +351,8 @@ export default function UnitsIndex({ units, filters }: UnitPageProps) {
                     <button
                         type="button"
                         onClick={() => deleteUnit(row.original)}
-                        className="rounded-lg p-2 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
                         title="Hapus satuan"
+                        className="inline-flex size-8 items-center justify-center rounded-md text-destructive transition-colors hover:bg-destructive/10"
                     >
                         <Trash2 className="size-4" />
                     </button>
@@ -524,6 +584,22 @@ export default function UnitsIndex({ units, filters }: UnitPageProps) {
                     </div>
                 </div>
             )}
+
+            <ConfirmDialog
+                open={deleteDialogOpen}
+                onOpenChange={setDeleteDialogOpen}
+                onConfirm={confirmDeleteCategory}
+                title="Hapus Satuan?"
+                description={
+                    deletingUnit
+                        ? `Apakah kamu yakin ingin menghapus satuan "${deletingUnit.name}"? Tindakan ini tidak dapat dibatalkan.`
+                        : "Apakah kamu yakin ingin menghapus satuan ini?"
+                }
+                confirmText="Ya, Hapus"
+                cancelText="Batal"
+                loading={deleteProcessing}
+                variant="destructive"
+            />
         </DashboardLayout>
     );
 }

@@ -96,6 +96,19 @@ class UnitController extends Controller
         return back()->with('success', 'Satuan berhasil diperbarui.');
     }
 
+    public function updateStatus(Request $request, Unit $warehouse)
+    {
+        $validated = $request->validate([
+            'is_active' => ['required', 'boolean']
+        ]);
+
+        $warehouse->update([
+            'is_active' => $validated['is_active']
+        ]);
+
+        return back()->with('success', 'Status satuan berhasil diperbarui.');
+    }
+
     public function destroy(Unit $unit): RedirectResponse
     {
         if ($unit->products()->exists()) {

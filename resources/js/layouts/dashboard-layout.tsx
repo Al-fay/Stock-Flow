@@ -34,6 +34,8 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Toaster } from "@/components/ui/sonner";
+import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 
 type Theme = "light" | "dark" | "system";
 
@@ -100,6 +102,7 @@ export default function DashboardLayout({
 }: {
     children: React.ReactNode;
 }) {
+    useAutoRefresh();
     const { url } = usePage();
 
     const [desktopCollapsed, setDesktopCollapsed] = useState(false);
@@ -216,8 +219,8 @@ export default function DashboardLayout({
                 {/* Logo */}
                 <div className="flex h-16 shrink-0 items-center justify-between border-b border-sidebar-border px-5">
                     <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground shadow-sm">
-                            I
+                        <div className="flex size-9 shrink-0 shadow-sm">
+                            <img src="/warehouse.svg" alt="logo" />
                         </div>
 
                         {(!desktopCollapsed || mobileOpen) && (
@@ -560,6 +563,8 @@ export default function DashboardLayout({
                 {/* Page */}
                 <main className="min-w-0 p-4 sm:p-6 lg:p-8">{children}</main>
             </div>
+
+            <Toaster position="top-right" richColors closeButton />
         </div>
     );
 }

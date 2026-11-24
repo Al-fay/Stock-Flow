@@ -97,6 +97,19 @@ class CustomerController extends Controller
         return back()->with('success', 'Pelanggan berhasil diperbarui.');
     }
 
+    public function updateStatus(Request $request, Customer $customer)
+    {
+        $validated = $request->validate([
+            'is_active' => ['required', 'boolean']
+        ]);
+
+        $customer->update([
+            'is_active' => $validated['is_active']
+        ]);
+
+        return back()->with('success', 'Status pelanggan berhasil diperbarui.');
+    }
+
     public function destroy(Customer $customer)
     {
         $customer->delete();

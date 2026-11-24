@@ -103,9 +103,6 @@ class InventoryController extends Controller
         ]);
     }
 
-    /**
-     * Menyimpan transaksi dan memperbarui stok produk.
-     */
     public function store(Request $request)
     {
         $validated = $request->validate([

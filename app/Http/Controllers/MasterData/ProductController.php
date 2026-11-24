@@ -152,6 +152,19 @@ class ProductController extends Controller
         return back()->with('success', 'Produk berhasil diperbarui.');
     }
 
+    public function updateStatus(Request $request, Product $product)
+    {
+        $validated = $request->validate([
+            'is_active' => ['required', 'boolean'],
+        ]);
+
+        $product->update([
+            'is_active' => $validated['is_active'],
+        ]);
+
+        return back()->with('success', 'Status produk berhasil diperbarui.');
+    }
+
     public function destroy(Product $product)
     {
         $product->delete();

@@ -100,6 +100,19 @@ class WarehouseController extends Controller
         return back()->with('success', 'Gudang berhasil diperbarui.');
     }
 
+    public function updateStatus(Request $request, Warehouse $warehouse)
+    {
+        $validated = $request->validate([
+            'is_active' => ['required', 'boolean']
+        ]);
+
+        $warehouse->update([
+            'is_active' => $validated['is_active']
+        ]);
+
+        return back()->with('success', 'Status warehouse berhasil diperbarui.');
+    }
+
     public function destroy(Warehouse $warehouse)
     {
         $warehouse->delete();

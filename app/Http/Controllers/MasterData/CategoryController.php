@@ -89,6 +89,19 @@ class CategoryController extends Controller
         return back()->with('success', 'Kategori berhasil diperbarui.');
     }
 
+    public function updateStatus(Request $request, Category $category)
+    {
+        $validated = $request->validate([
+            'is_active' => ['required', 'boolean']
+        ]);
+
+        $category->update([
+            'is_active' => $validated['is_active']
+        ]);
+
+        return back()->with('success', 'Status kategori berhasil diperbarui');
+    }
+
     public function destroy(Category $category): RedirectResponse
     {
         $category->delete();

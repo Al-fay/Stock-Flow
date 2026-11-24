@@ -10,6 +10,8 @@ import { DataTable } from "@/components/master-data/data-table";
 import type { PaginatedData } from "@/types/master-data";
 import { Switch } from "@/components/ui/switch";
 import DashboardLayout from "@/layouts/dashboard-layout";
+import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/my-components/confirm-dialog";
 
 interface Category {
     id: number;
@@ -53,6 +55,11 @@ export default function CategoryIndex({
     const [editingCategory, setEditingCategory] = useState<Category | null>(
         null,
     );
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deletingCategory, setDeletingCategory] = useState<Category | null>(
+        null,
+    );
+    const [deleteProcessing, setDeleteProcessing] = useState(false);
 
     const form = useForm<CategoryForm>(initialForm);
 
@@ -117,13 +124,29 @@ export default function CategoryIndex({
     // Simpan kategori
     const submit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        const isEditing = !!editingCategory;
 
         const options = {
             preserveScroll: true,
             onSuccess: () => {
+                toast.success(
+                    isEditing ? "Berhasil diperbarui" : "Berhasil ditambahkan",
+                    {
+                        description: isEditing
+                            ? "Data kategori berhasil diperbarui."
+                            : "Data kategori berhasil ditambahkan.",
+                    },
+                );
+
                 setModalOpen(false);
                 setEditingCategory(null);
                 form.reset();
+            },
+            onError: () => {
+                toast.error("Gagal menyimpan", {
+                    description:
+                        "Periksa kembali data kategori yang kamu masukkan.",
+                });
             },
         };
 
@@ -136,15 +159,57 @@ export default function CategoryIndex({
 
     // Hapus kategori
     const deleteCategory = (category: Category) => {
-        const confirmed = window.confirm(
-            `Apakah kamu yakin ingin menghapus kategori "${category.name}"?`,
-        );
+        setDeletingCategory(category);
+        setDeleteDialogOpen(true);
+    };
 
-        if (!confirmed) return;
+    const confirmDeleteCategory = () => {
+        if (!deletingCategory) return;
 
-        router.delete(`/master-data/categories/${category.id}`, {
+        setDeleteProcessing(true);
+
+        router.delete(`/master-data/categories/${deletingCategory.id}`, {
             preserveScroll: true,
+            onSuccess: () => {
+                toast.success("Berhasil dihapus", {
+                    description: `Kategori "${deletingCategory.name}" berhasil dihapus.`,
+                });
+
+                setDeleteDialogOpen(false);
+                setDeletingCategory(null);
+            },
+            onError: () => {
+                toast.error("Gagal menghapus", {
+                    description: "Terjadi kesalahan saat menghapus kategori.",
+                });
+            },
+            onFinish: () => {
+                setDeleteProcessing(false);
+            },
         });
+    };
+
+    const updateCategoryStatus = (id: number, is_active: boolean) => {
+        router.patch(
+            `/master-data/categories/${id}/status`,
+            { is_active },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    toast.success("Berhasil disimpan", {
+                        description: `Status kategori berhasil ${
+                            is_active ? "diaktifkan" : "dinonaktifkan"
+                        }.`,
+                    });
+                },
+                onError: () => {
+                    toast.error("Gagal disimpan", {
+                        description:
+                            "Terjadi kesalahan saat mengubah status kategori.",
+                    });
+                },
+            },
+        );
     };
 
     // Pagination
@@ -221,15 +286,24 @@ export default function CategoryIndex({
             header: "Status",
             enableSorting: false,
             cell: ({ row }) => (
-                <span
-                    className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
-                        row.original.is_active
-                            ? "bg-primary/10 text-primary"
-                            : "bg-muted text-muted-foreground"
-                    }`}
-                >
-                    {row.original.is_active ? "Aktif" : "Tidak Aktif"}
-                </span>
+                <div className="flex flex-col items-center gap-1.5 cursor-pointer">
+                    <Switch
+                        checked={row.original.is_active}
+                        onCheckedChange={(checked) => {
+                            updateCategoryStatus(row.original.id, checked);
+                        }}
+                    />
+
+                    <span
+                        className={`text-xs font-medium  ${
+                            row.original.is_active
+                                ? "text-primary"
+                                : "text-muted-foreground"
+                        }`}
+                    >
+                        {row.original.is_active ? "Aktif" : "Nonaktif"}
+                    </span>
+                </div>
             ),
         },
         {
@@ -569,6 +643,22 @@ export default function CategoryIndex({
                         </div>
                     </div>
                 )}
+
+                <ConfirmDialog
+                    open={deleteDialogOpen}
+                    onOpenChange={setDeleteDialogOpen}
+                    onConfirm={confirmDeleteCategory}
+                    title="Hapus Kategori?"
+                    description={
+                        deletingCategory
+                            ? `Apakah kamu yakin ingin menghapus kategori "${deletingCategory.name}"? Tindakan ini tidak dapat dibatalkan.`
+                            : "Apakah kamu yakin ingin menghapus kategori ini?"
+                    }
+                    confirmText="Ya, Hapus"
+                    cancelText="Batal"
+                    loading={deleteProcessing}
+                    variant="destructive"
+                />
             </DashboardLayout>
         </>
     );

@@ -10,6 +10,8 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import DashboardLayout from "@/layouts/dashboard-layout";
 import { DataTable } from "@/components/master-data/data-table";
 import { Switch } from "@/components/ui/switch";
+import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/my-components/confirm-dialog";
 
 interface Supplier {
     id: number;
@@ -75,6 +77,12 @@ export default function SuppliersIndex({
     const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(
         null,
     );
+    const [deleteError, setDeleteError] = useState("");
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deletingSupplier, setDeletingSupplier] = useState<Supplier | null>(
+        null,
+    );
+    const [deleteProcessing, setDeleteProcessing] = useState(false);
 
     const form = useForm<SupplierForm>(initialForm);
 
@@ -103,6 +111,7 @@ export default function SuppliersIndex({
 
     const openCreateModal = () => {
         setEditingSupplier(null);
+        setDeleteError("");
         form.reset();
         form.clearErrors();
         form.setData(initialForm);
@@ -111,6 +120,7 @@ export default function SuppliersIndex({
 
     const openEditModal = (supplier: Supplier) => {
         setEditingSupplier(supplier);
+        setDeleteError("");
         form.clearErrors();
 
         form.setData({
@@ -136,10 +146,30 @@ export default function SuppliersIndex({
 
     const submit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        const isEditing = !!editingSupplier;
 
         const options = {
             preserveScroll: true,
-            onSuccess: () => closeModal(),
+            onSuccess: () => {
+                toast.success(
+                    isEditing ? "Berhasil diperbarui" : "Berhasil ditambahkan",
+                    {
+                        description: isEditing
+                            ? "Data supplier berhasil diperbarui."
+                            : "Data supplier berhasil ditambahkan.",
+                    },
+                );
+
+                setModalOpen(false);
+                setEditingSupplier(null);
+                form.reset();
+            },
+            onError: () => {
+                toast.error("Gagal menyimpan", {
+                    description:
+                        "Periksa kembali data supplier yang kamu masukkan.",
+                });
+            },
         };
 
         if (editingSupplier) {
@@ -150,15 +180,57 @@ export default function SuppliersIndex({
     };
 
     const deleteSupplier = (supplier: Supplier) => {
-        const confirmed = window.confirm(
-            `Yakin ingin menghapus supplier "${supplier.name}"?`,
-        );
+        setDeletingSupplier(supplier);
+        setDeleteDialogOpen(true);
+    };
 
-        if (!confirmed) return;
+    const confirmDeleteSupplier = () => {
+        if (!deletingSupplier) return;
 
-        router.delete(`/master-data/suppliers/${supplier.id}`, {
+        setDeleteProcessing(true);
+
+        router.delete(`/master-data/suppliers/${deletingSupplier.id}`, {
             preserveScroll: true,
+            onSuccess: () => {
+                toast.success("Berhasil dihapus", {
+                    description: `Supplier "${deletingSupplier.name}" berhasil dihapus.`,
+                });
+
+                setDeleteDialogOpen(false);
+                setDeletingSupplier(null);
+            },
+            onError: () => {
+                toast.error("Gagal menghapus", {
+                    description: "Terjadi kesalahan saat menghapus supplier.",
+                });
+            },
+            onFinish: () => {
+                setDeleteProcessing(false);
+            },
         });
+    };
+
+    const updateSupplierStatus = (id: number, is_active: boolean) => {
+        router.patch(
+            `/master-data/suppliers/${id}/status`,
+            { is_active },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    toast.success("Berhasil disimpan", {
+                        description: `Status supplier berhasil ${
+                            is_active ? "diaktifkan" : "dinonaktifkan"
+                        }.`,
+                    });
+                },
+                onError: () => {
+                    toast.error("Gagal disimpan", {
+                        description:
+                            "Terjadi kesalahan saat mengubah status supplier.",
+                    });
+                },
+            },
+        );
     };
 
     const handlePaginationChange = (pagination: PaginationState) => {
@@ -239,15 +311,24 @@ export default function SuppliersIndex({
             header: "Status",
             enableSorting: false,
             cell: ({ row }) => (
-                <span
-                    className={
-                        row.original.is_active
-                            ? "inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
-                            : "inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground"
-                    }
-                >
-                    {row.original.is_active ? "Aktif" : "Nonaktif"}
-                </span>
+                <div className="flex flex-col items-center gap-1.5 cursor-pointer">
+                    <Switch
+                        checked={row.original.is_active}
+                        onCheckedChange={(checked) => {
+                            updateSupplierStatus(row.original.id, checked);
+                        }}
+                    />
+
+                    <span
+                        className={`text-xs font-medium  ${
+                            row.original.is_active
+                                ? "text-primary"
+                                : "text-muted-foreground"
+                        }`}
+                    >
+                        {row.original.is_active ? "Aktif" : "Nonaktif"}
+                    </span>
+                </div>
             ),
         },
         {
@@ -279,7 +360,7 @@ export default function SuppliersIndex({
                     <button
                         type="button"
                         onClick={() => deleteSupplier(row.original)}
-                        className="rounded-lg p-2 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
+                        className="inline-flex size-8 items-center justify-center rounded-md text-destructive transition-colors hover:bg-destructive/10"
                         title="Hapus supplier"
                     >
                         <Trash2 className="size-4" />
@@ -316,6 +397,20 @@ export default function SuppliersIndex({
                         Tambah Supplier
                     </button>
                 </div>
+
+                {/* Delete error */}
+                {deleteError && (
+                    <div className="flex items-start justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                        <span>{deleteError}</span>
+                        <button
+                            type="button"
+                            onClick={() => setDeleteError("")}
+                            className="font-semibold"
+                        >
+                            Tutup
+                        </button>
+                    </div>
+                )}
 
                 {/* Data Table */}
                 <div className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
@@ -519,6 +614,22 @@ export default function SuppliersIndex({
                     </div>
                 </div>
             )}
+
+            <ConfirmDialog
+                open={deleteDialogOpen}
+                onOpenChange={setDeleteDialogOpen}
+                onConfirm={confirmDeleteSupplier}
+                title="Hapus Supplier?"
+                description={
+                    deletingSupplier
+                        ? `Apakah kamu yakin ingin dmenghapus supplier "${deletingSupplier.name}"? Tindakan ini tidak dapat dibatalkan.`
+                        : "Apakah kamu yakin ingin menghapus supplier ini?"
+                }
+                confirmText="Ya, Hapus"
+                cancelText="Batal"
+                loading={deleteProcessing}
+                variant="destructive"
+            />
         </DashboardLayout>
     );
 }

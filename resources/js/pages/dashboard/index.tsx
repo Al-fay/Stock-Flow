@@ -4,123 +4,150 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
     Package,
-    ShoppingCart,
+    CheckCircle2,
     Wallet,
     AlertTriangle,
-    ArrowUpRight,
     MoreHorizontal,
     LogOut,
+    Plus,
 } from "lucide-react";
 
-import { Head, router, usePage } from "@inertiajs/react";
+import { Head, router, useForm, usePage } from "@inertiajs/react";
+import {
+    initialForm,
+    ProductForm,
+    ProductPageProps,
+} from "../master-data/products";
+import { FormEvent, useState } from "react";
+import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
 
 interface SharedProps {
     [key: string]: unknown;
-
     auth: {
-        user: {
-            id: number;
-            name: string;
-            email: string;
-        } | null;
+        user: { id: number; name: string; email: string } | null;
     };
 }
 
-const stats = [
-    {
-        title: "Total Products",
-        value: "1,284",
-        change: "+12.5%",
-        icon: Package,
-    },
-    {
-        title: "Total Sales",
-        value: "Rp 48.5M",
-        change: "+8.2%",
-        icon: ShoppingCart,
-    },
-    {
-        title: "Revenue",
-        value: "Rp 12.8M",
-        change: "+15.3%",
-        icon: Wallet,
-    },
-    {
-        title: "Low Stock",
-        value: "18",
-        change: "Needs attention",
-        icon: AlertTriangle,
-    },
-];
+interface DashboardProps extends Pick<
+    ProductPageProps,
+    "categories" | "units"
+> {
+    stats: {
+        total_products: number;
+        active_products: number;
+        stock_value: number;
+        low_stock: number;
+    };
+    inventorySummary: { name: string; value: number; color: string }[];
+    chart: { day: string; value: number }[];
+    recentProducts: {
+        id: number;
+        name: string;
+        sku: string;
+        category: string;
+        unit: string | null;
+        stock: number;
+        price: number;
+        status: "In Stock" | "Low Stock" | "Out of Stock";
+    }[];
+}
 
-const products = [
-    {
-        name: "MacBook Pro M4",
-        sku: "PRD-001",
-        category: "Electronics",
-        stock: 24,
-        price: "Rp 25.000.000",
-        status: "In Stock",
-    },
-    {
-        name: "Logitech MX Master",
-        sku: "PRD-002",
-        category: "Accessories",
-        stock: 8,
-        price: "Rp 1.500.000",
-        status: "Low Stock",
-    },
-    {
-        name: "Samsung Monitor",
-        sku: "PRD-003",
-        category: "Electronics",
-        stock: 42,
-        price: "Rp 4.500.000",
-        status: "In Stock",
-    },
-    {
-        name: "Mechanical Keyboard",
-        sku: "PRD-004",
-        category: "Accessories",
-        stock: 3,
-        price: "Rp 850.000",
-        status: "Low Stock",
-    },
-];
+const rupiah = (n: number) =>
+    new Intl.NumberFormat("id-ID", {
+        style: "currency",
+        currency: "IDR",
+        maximumFractionDigits: 0,
+    }).format(n);
 
-const sales = [
-    { day: "Mon", value: 45 },
-    { day: "Tue", value: 70 },
-    { day: "Wed", value: 55 },
-    { day: "Thu", value: 90 },
-    { day: "Fri", value: 65 },
-    { day: "Sat", value: 100 },
-    { day: "Sun", value: 80 },
-];
+const statusClass: Record<string, string> = {
+    "In Stock": "border-emerald-500/30 text-emerald-600",
+    "Low Stock": "border-amber-500/30 text-amber-600",
+    "Out of Stock": "border-red-500/30 text-red-600",
+};
 
-const inventorySummary = [
-    {
-        name: "In Stock",
-        value: 75,
-        color: "bg-emerald-500",
-    },
-    {
-        name: "Low Stock",
-        value: 18,
-        color: "bg-amber-500",
-    },
-    {
-        name: "Out of Stock",
-        value: 7,
-        color: "bg-red-500",
-    },
-];
-
-export default function Dashboard() {
+export default function Dashboard({
+    categories = [],
+    units = [],
+    stats,
+    inventorySummary,
+    chart,
+    recentProducts,
+}: DashboardProps) {
     const { auth } = usePage<SharedProps>().props;
+    const form = useForm<ProductForm>(initialForm);
+    const [modalOpen, setModalOpen] = useState(false);
+
+    const statCards = [
+        {
+            title: "Total Products",
+            value: stats.total_products.toLocaleString("id-ID"),
+            note: "Semua produk",
+            icon: Package,
+        },
+        {
+            title: "Active Products",
+            value: stats.active_products.toLocaleString("id-ID"),
+            note: "Produk aktif",
+            icon: CheckCircle2,
+        },
+        {
+            title: "Stock Value",
+            value: rupiah(stats.stock_value),
+            note: "Stok × harga beli",
+            icon: Wallet,
+        },
+        {
+            title: "Low Stock",
+            value: stats.low_stock.toLocaleString("id-ID"),
+            note: "Needs attention",
+            icon: AlertTriangle,
+        },
+    ];
+
+    const maxChart = Math.max(...chart.map((c) => c.value), 1);
 
     const handleLogout = () => {
         router.post("/logout");
+    };
+
+    const handleAddProduct = () => {
+        form.reset();
+        form.clearErrors();
+        form.setData(initialForm);
+        setModalOpen(true);
+    };
+
+    const closeModal = () => {
+        if (form.processing) return;
+
+        setModalOpen(false);
+        form.reset();
+        form.clearErrors();
+    };
+
+    const submit = (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+
+        const options = {
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.success("Berhasil ditambahkan", {
+                    description: "Produk baru berhasil ditambahkan.",
+                });
+
+                setModalOpen(false);
+                form.reset();
+            },
+            onError: () => {
+                toast.error("Gagal menyimpan", {
+                    description:
+                        "Periksa kembali data produk yang kamu masukkan.",
+                });
+            },
+        };
+
+        form.post("/master-data/products", options);
     };
 
     return (
@@ -155,15 +182,19 @@ export default function Dashboard() {
                             </Button>
 
                             {/* ADD PRODUCT */}
-                            <Button className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90">
-                                + Add Product
+                            <Button
+                                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+                                onClick={handleAddProduct}
+                            >
+                                <Plus className="mr-2 size-4" />
+                                Add Product
                             </Button>
                         </div>
                     </div>
 
                     {/* STATISTICS */}
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                        {stats.map((stat) => {
+                        {statCards.map((stat) => {
                             const Icon = stat.icon;
 
                             return (
@@ -181,12 +212,8 @@ export default function Dashboard() {
                                             {stat.value}
                                         </div>
 
-                                        <div className="mt-2 flex items-center gap-1 text-xs text-emerald-600">
-                                            {stat.title !== "Low Stock" && (
-                                                <ArrowUpRight className="size-4" />
-                                            )}
-
-                                            {stat.change}
+                                        <div className="mt-2 text-xs text-muted-foreground">
+                                            {stat.note}
                                         </div>
                                     </CardContent>
                                 </Card>
@@ -196,29 +223,36 @@ export default function Dashboard() {
 
                     {/* ANALYTICS */}
                     <div className="grid grid-cols-1 gap-4 xl:grid-cols-7">
-                        {/* SALES OVERVIEW */}
+                        {/* NEW PRODUCTS CHART */}
                         <Card className="xl:col-span-4">
                             <CardHeader>
-                                <CardTitle>Sales Overview</CardTitle>
+                                <CardTitle>New Products</CardTitle>
 
                                 <p className="text-sm text-muted-foreground">
-                                    Weekly sales performance
+                                    Produk ditambahkan 7 hari terakhir
                                 </p>
                             </CardHeader>
 
                             <CardContent>
                                 <div className="flex h-64 items-end justify-around gap-4 border-b pb-2">
-                                    {sales.map((item) => (
+                                    {chart.map((item) => (
                                         <div
                                             key={item.day}
                                             className="flex h-full flex-1 flex-col items-center justify-end gap-2"
                                         >
+                                            <span className="text-xs font-medium">
+                                                {item.value}
+                                            </span>
+
                                             <div
                                                 className="w-full max-w-12 rounded-t-md bg-primary transition-all hover:opacity-70"
                                                 style={{
-                                                    height: `${item.value}%`,
+                                                    height: `${(item.value / maxChart) * 80}%`,
+                                                    minHeight: item.value
+                                                        ? 4
+                                                        : 0,
                                                 }}
-                                                title={`${item.value}%`}
+                                                title={`${item.value} produk`}
                                             />
 
                                             <span className="text-xs text-muted-foreground">
@@ -278,7 +312,10 @@ export default function Dashboard() {
 
                             <button
                                 type="button"
-                                className="text-sm font-medium text-primary hover:underline"
+                                className="text-sm font-medium text-primary hover:underline cursor-pointer"
+                                onClick={() =>
+                                    router.get("/master-data/products")
+                                }
                             >
                                 View all
                             </button>
@@ -290,25 +327,29 @@ export default function Dashboard() {
                                     <thead>
                                         <tr className="border-b text-left text-muted-foreground">
                                             <th className="p-3">Product</th>
-
                                             <th className="p-3">SKU</th>
-
                                             <th className="p-3">Category</th>
-
                                             <th className="p-3">Stock</th>
-
                                             <th className="p-3">Price</th>
-
                                             <th className="p-3">Status</th>
-
-                                            <th className="p-3">Action</th>
                                         </tr>
                                     </thead>
 
                                     <tbody>
-                                        {products.map((product) => (
+                                        {recentProducts.length === 0 && (
+                                            <tr>
+                                                <td
+                                                    colSpan={7}
+                                                    className="p-6 text-center text-muted-foreground"
+                                                >
+                                                    Belum ada produk.
+                                                </td>
+                                            </tr>
+                                        )}
+
+                                        {recentProducts.map((product) => (
                                             <tr
-                                                key={product.sku}
+                                                key={product.id}
                                                 className="border-b last:border-0 hover:bg-muted/40"
                                             >
                                                 <td className="p-3 font-medium">
@@ -324,35 +365,25 @@ export default function Dashboard() {
                                                 </td>
 
                                                 <td className="p-3">
-                                                    {product.stock}
+                                                    {product.stock}{" "}
+                                                    {product.unit}
                                                 </td>
 
                                                 <td className="p-3">
-                                                    {product.price}
+                                                    {rupiah(product.price)}
                                                 </td>
 
                                                 <td className="p-3">
                                                     <Badge
                                                         variant="outline"
                                                         className={
-                                                            product.status ===
-                                                            "In Stock"
-                                                                ? "border-emerald-500/30 text-emerald-600"
-                                                                : "border-amber-500/30 text-amber-600"
+                                                            statusClass[
+                                                                product.status
+                                                            ]
                                                         }
                                                     >
                                                         {product.status}
                                                     </Badge>
-                                                </td>
-
-                                                <td className="p-3">
-                                                    <button
-                                                        type="button"
-                                                        className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                                                        aria-label={`More actions for ${product.name}`}
-                                                    >
-                                                        <MoreHorizontal className="size-4" />
-                                                    </button>
                                                 </td>
                                             </tr>
                                         ))}
@@ -362,6 +393,325 @@ export default function Dashboard() {
                         </CardContent>
                     </Card>
                 </div>
+
+                {modalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4">
+                        <div className="my-auto w-full max-w-3xl rounded-2xl border border-border bg-card shadow-xl">
+                            <div className="flex items-center justify-between border-b border-border px-6 py-4">
+                                <div>
+                                    <h2 className="text-lg font-semibold">
+                                        Tambah Produk
+                                    </h2>
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                        Lengkapi informasi produk di bawah ini.
+                                    </p>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={closeModal}
+                                    disabled={form.processing}
+                                    className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+
+                            <form onSubmit={submit}>
+                                <div className="grid gap-5 p-6 sm:grid-cols-2">
+                                    <div>
+                                        <label className="mb-1.5 block text-sm font-medium">
+                                            SKU *
+                                        </label>
+                                        <input
+                                            className="form-input"
+                                            value={form.data.sku}
+                                            onChange={(e) =>
+                                                form.setData(
+                                                    "sku",
+                                                    e.target.value,
+                                                )
+                                            }
+                                            placeholder="Contoh: PRD-001"
+                                            required
+                                        />
+                                        {form.errors.sku && (
+                                            <p className="mt-1 text-xs text-destructive">
+                                                {form.errors.sku}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-1.5 block text-sm font-medium">
+                                            Barcode
+                                        </label>
+                                        <input
+                                            className="form-input"
+                                            value={form.data.barcode}
+                                            onChange={(e) =>
+                                                form.setData(
+                                                    "barcode",
+                                                    e.target.value,
+                                                )
+                                            }
+                                            placeholder="Masukkan barcode"
+                                        />
+                                        {form.errors.barcode && (
+                                            <p className="mt-1 text-xs text-destructive">
+                                                {form.errors.barcode}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div className="sm:col-span-2">
+                                        <label className="mb-1.5 block text-sm font-medium">
+                                            Nama Produk *
+                                        </label>
+                                        <input
+                                            className="form-input"
+                                            value={form.data.name}
+                                            onChange={(e) =>
+                                                form.setData(
+                                                    "name",
+                                                    e.target.value,
+                                                )
+                                            }
+                                            placeholder="Masukkan nama produk"
+                                            required
+                                        />
+                                        {form.errors.name && (
+                                            <p className="mt-1 text-xs text-destructive">
+                                                {form.errors.name}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-1.5 block text-sm font-medium">
+                                            Kategori
+                                        </label>
+                                        <select
+                                            className="form-input"
+                                            value={form.data.category_id}
+                                            onChange={(e) =>
+                                                form.setData(
+                                                    "category_id",
+                                                    e.target.value,
+                                                )
+                                            }
+                                        >
+                                            <option value="">
+                                                Tanpa kategori
+                                            </option>
+                                            {categories.map((category) => (
+                                                <option
+                                                    key={category.id}
+                                                    value={category.id}
+                                                >
+                                                    {category.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {form.errors.category_id && (
+                                            <p className="mt-1 text-xs text-destructive">
+                                                {form.errors.category_id}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-1.5 block text-sm font-medium">
+                                            Satuan *
+                                        </label>
+                                        <select
+                                            className="form-input"
+                                            value={form.data.unit_id}
+                                            onChange={(e) =>
+                                                form.setData(
+                                                    "unit_id",
+                                                    e.target.value,
+                                                )
+                                            }
+                                            required
+                                        >
+                                            <option value="">
+                                                Pilih satuan
+                                            </option>
+                                            {units.map((unit) => (
+                                                <option
+                                                    key={unit.id}
+                                                    value={unit.id}
+                                                >
+                                                    {unit.name} ({unit.symbol})
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {form.errors.unit_id && (
+                                            <p className="mt-1 text-xs text-destructive">
+                                                {form.errors.unit_id}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-1.5 block text-sm font-medium">
+                                            Harga Beli *
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            className="form-input"
+                                            value={form.data.purchase_price}
+                                            onChange={(e) =>
+                                                form.setData(
+                                                    "purchase_price",
+                                                    e.target.value,
+                                                )
+                                            }
+                                            required
+                                        />
+                                        {form.errors.purchase_price && (
+                                            <p className="mt-1 text-xs text-destructive">
+                                                {form.errors.purchase_price}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-1.5 block text-sm font-medium">
+                                            Harga Jual *
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            className="form-input"
+                                            value={form.data.selling_price}
+                                            onChange={(e) =>
+                                                form.setData(
+                                                    "selling_price",
+                                                    e.target.value,
+                                                )
+                                            }
+                                            required
+                                        />
+                                        {form.errors.selling_price && (
+                                            <p className="mt-1 text-xs text-destructive">
+                                                {form.errors.selling_price}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-1.5 block text-sm font-medium">
+                                            Minimum Stok *
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.001"
+                                            className="form-input"
+                                            value={form.data.minimum_stock}
+                                            onChange={(e) =>
+                                                form.setData(
+                                                    "minimum_stock",
+                                                    e.target.value,
+                                                )
+                                            }
+                                            required
+                                        />
+                                        {form.errors.minimum_stock && (
+                                            <p className="mt-1 text-xs text-destructive">
+                                                {form.errors.minimum_stock}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-1.5 block text-sm font-medium">
+                                            Stok Saat Ini
+                                        </label>
+                                        <input
+                                            className="form-input cursor-not-allowed bg-muted"
+                                            value={"0"}
+                                            disabled
+                                        />
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                            Stok diubah melalui modul Inventory.
+                                        </p>
+                                    </div>
+
+                                    <div className="sm:col-span-2">
+                                        <label className="mb-1.5 block text-sm font-medium">
+                                            Deskripsi
+                                        </label>
+                                        <textarea
+                                            className="form-input min-h-24 resize-y"
+                                            value={form.data.description}
+                                            onChange={(e) =>
+                                                form.setData(
+                                                    "description",
+                                                    e.target.value,
+                                                )
+                                            }
+                                            placeholder="Deskripsi produk (opsional)"
+                                        />
+                                        {form.errors.description && (
+                                            <p className="mt-1 text-xs text-destructive">
+                                                {form.errors.description}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div className="flex items-center justify-between rounded-xl border border-border p-4 sm:col-span-2">
+                                        <div>
+                                            <p className="text-sm font-medium">
+                                                Status Produk
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                Aktifkan jika produk dapat
+                                                digunakan.
+                                            </p>
+                                        </div>
+
+                                        <Switch
+                                            checked={form.data.is_active}
+                                            onCheckedChange={(checked) =>
+                                                form.setData(
+                                                    "is_active",
+                                                    checked,
+                                                )
+                                            }
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
+                                    <button
+                                        type="button"
+                                        onClick={closeModal}
+                                        disabled={form.processing}
+                                        className="rounded-xl border border-border px-4 py-2.5 text-sm font-medium hover:bg-muted disabled:opacity-50"
+                                    >
+                                        Batal
+                                    </button>
+
+                                    <button
+                                        type="submit"
+                                        disabled={form.processing}
+                                        className="rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        {form.processing
+                                            ? "Menyimpan..."
+                                            : "Tambah Produk"}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
             </DashboardLayout>
         </>
     );

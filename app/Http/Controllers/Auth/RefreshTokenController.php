@@ -16,22 +16,22 @@ class RefreshTokenController extends Controller
 
         if (!$refreshToken) {
             return response()->json([
-                'message' => 'Refresh token tidak ditemukan'
+                'message' => 'Refresh token tidak ditemukan.'
             ], 401);
         }
 
         try {
             $guard = Auth::guard('api');
+
             $newToken = $guard
+                ->setTTL(15)
                 ->setToken($refreshToken)
                 ->refresh();
-
-            $ttl = 15;
 
             $accessCookie = cookie(
                 'access_token',
                 $newToken,
-                $ttl,
+                15,
                 '/',
                 null,
                 $request->isSecure(),
@@ -53,13 +53,14 @@ class RefreshTokenController extends Controller
             );
 
             return response()->json([
-                'message' => 'Token berhasil diperbarui.',
+                'message' => 'Token berhasil diperbarui.'
             ])
                 ->withCookie($accessCookie)
                 ->withCookie($refreshCookie);
-        } catch (JWTException $exc) {
+        } catch (JWTException $exception) {
+
             return response()->json([
-                'message' => 'Session telah berakhir. Silahkan login kembali.'
+                'message' => 'Session telah berakhir. Silakan login kembali.'
             ], 401)
                 ->withCookie(cookie()->forget('access_token'))
                 ->withCookie(cookie()->forget('refresh_token'));

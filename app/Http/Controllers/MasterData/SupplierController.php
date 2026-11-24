@@ -100,6 +100,19 @@ class SupplierController extends Controller
         return back()->with('success', 'Supplier berhasil diperbarui.');
     }
 
+    public function updateStatus(Request $request, Supplier $supplier)
+    {
+        $validated = $request->validate([
+            'is_active' => ['required', 'boolean']
+        ]);
+
+        $supplier->update([
+            'is_active' => $validated['is_active']
+        ]);
+
+        return back()->with('success', 'Status supplier berhasil diperbarui.');
+    }
+
     public function destroy(Supplier $supplier)
     {
         $supplier->delete();

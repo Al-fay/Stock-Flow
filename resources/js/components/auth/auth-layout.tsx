@@ -24,11 +24,11 @@ export default function AuthLayout({
             <div className="w-full max-w-md">
                 <div className="mb-8 text-center">
                     <Link
-                        href="/sign-in"
+                        href="/"
                         className="inline-flex items-center gap-2 text-2xl font-bold tracking-tight text-foreground"
                     >
-                        <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-                            S
+                        <span className="flex size-10 items-center justify-center rounded-xl text-primary-foreground">
+                            <img src="/warehouse.svg" />
                         </span>
                         StockFlow
                     </Link>
