@@ -226,13 +226,14 @@ export default function InventoryIndex({
             columnHelper.accessor("movement_type", {
                 header: "Jenis",
                 cell: ({ row }) => {
-                    const type: MovementType = row.original.movement_type;
+                    const type =
+                        row.original.movement_type?.toUpperCase() as MovementType;
 
                     return (
                         <span
                             className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getMovementStyle(type)}`}
                         >
-                            {movementLabels[type]}
+                            {movementLabels[type] ?? row.original.movement_type}
                         </span>
                     );
                 },

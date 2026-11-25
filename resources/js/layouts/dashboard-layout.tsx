@@ -24,6 +24,9 @@ import {
     Info,
     Check,
     Ruler,
+    ClipboardCheck,
+    ArrowDownUp,
+    House,
 } from "lucide-react";
 import {
     DropdownMenu,
@@ -36,6 +39,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Toaster } from "@/components/ui/sonner";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
+import { SharedPropsUser } from "@/types/user";
 
 type Theme = "light" | "dark" | "system";
 
@@ -46,7 +50,7 @@ const navigation = [
             {
                 label: "Dashboard",
                 href: "/dashboard",
-                icon: LayoutDashboard,
+                icon: House,
             },
         ],
     },
@@ -62,6 +66,16 @@ const navigation = [
                 label: "Inventory",
                 href: "/inventory",
                 icon: ArrowLeftRight,
+            },
+            {
+                label: "Stock Opname",
+                href: "/inventory/opname",
+                icon: ClipboardCheck,
+            },
+            {
+                label: "Stock Movement",
+                href: "/inventory/movements",
+                icon: ArrowDownUp,
             },
             {
                 label: "Products",
@@ -104,12 +118,19 @@ export default function DashboardLayout({
 }) {
     useAutoRefresh();
     const { url } = usePage();
-
+    const { auth } = usePage<SharedPropsUser>().props;
     const [desktopCollapsed, setDesktopCollapsed] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
     const [theme, setTheme] = useState<Theme>("system");
     const [mounted, setMounted] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
+
+    const initial = auth.user?.name
+        .split(" ")
+        .map((word) => word[0])
+        .join("")
+        .substring(0, 2)
+        .toUpperCase();
 
     // Initialize saved theme
     useEffect(() => {
@@ -261,8 +282,10 @@ export default function DashboardLayout({
                                     const active =
                                         item.href === "/"
                                             ? url === "/"
-                                            : url === item.href ||
-                                              url.startsWith(item.href + "/");
+                                            : item.href === "/inventory"
+                                              ? url === "/inventory"
+                                              : url === item.href ||
+                                                url.startsWith(item.href + "/");
 
                                     return (
                                         <Link
@@ -304,18 +327,18 @@ export default function DashboardLayout({
                         <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-xl p-2 text-left outline-none transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring">
                             {/* Avatar */}
                             <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                                AD
+                                {initial}
                             </div>
 
                             {(!desktopCollapsed || mobileOpen) && (
                                 <>
                                     <div className="min-w-0 flex-1">
                                         <p className="truncate text-sm font-semibold">
-                                            Administrator
+                                            {auth.user?.name ?? "Username"}
                                         </p>
 
                                         <p className="truncate text-xs text-muted-foreground">
-                                            admin@example.com
+                                            {auth.user?.email ?? "Email user"}
                                         </p>
                                     </div>
 
@@ -335,15 +358,15 @@ export default function DashboardLayout({
                                 <DropdownMenuLabel>
                                     <div className="flex items-center gap-3 py-1">
                                         <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 font-bold text-primary">
-                                            AD
+                                            {initial}
                                         </div>
 
                                         <div className="min-w-0 flex-1">
                                             <p className="truncate text-sm font-semibold">
-                                                Administrator
+                                                {auth.user?.name}
                                             </p>
                                             <p className="truncate text-xs text-muted-foreground">
-                                                admin@example.com
+                                                {auth.user?.email}
                                             </p>
                                         </div>
                                     </div>

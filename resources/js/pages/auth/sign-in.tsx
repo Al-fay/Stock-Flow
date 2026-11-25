@@ -157,9 +157,7 @@ export default function SignIn() {
                         disabled={processing}
                         className="group flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition hover:-translate-y-0.5 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                        {processing
-                            ? "Signing in..."
-                            : "Sign in to your account"}
+                        {processing ? "Loading..." : "Sign in to your account"}
 
                         {!processing && (
                             <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />

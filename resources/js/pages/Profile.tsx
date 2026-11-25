@@ -1,28 +1,31 @@
 import DashboardLayout from "@/layouts/dashboard-layout";
-import { Head } from "@inertiajs/react";
+import { SharedPropsUser } from "@/types/user";
+import { Head, usePage } from "@inertiajs/react";
 import { Lock, Mail, User, ShieldCheck } from "lucide-react";
 
-interface User {
-    id: number;
-    name: string;
-    email: string;
-    email_verified_at: string | null;
-    created_at?: string;
-}
+// interface User {
+//     id: number;
+//     name: string;
+//     email: string;
+//     email_verified_at: string | null;
+//     created_at?: string;
+// }
 
-interface ProfileProps {
-    user: User;
-}
+// interface ProfileProps {
+//     user: User;
+// }
 
-export default function Profile({ user }: ProfileProps) {
-    const initials = user.name
+export default function Profile() {
+    const { auth } = usePage<SharedPropsUser>().props;
+
+    const initials = auth.user?.name
         .split(" ")
         .map((word) => word[0])
         .join("")
         .substring(0, 2)
         .toUpperCase();
 
-    const verified = Boolean(user.email_verified_at);
+    const verified = Boolean(auth.user?.email_verified_at);
 
     return (
         <>
@@ -56,7 +59,7 @@ export default function Profile({ user }: ProfileProps) {
                                 </p>
 
                                 <h2 className="text-2xl sm:text-3xl font-bold text-black dark:text-white">
-                                    {user.name}
+                                    {auth.user?.name}
                                 </h2>
 
                                 <span className="inline-block mt-3 px-3 py-1 rounded-full text-xs font-semibold bg-white/20 text-black dark:text-white border border-white/20">
@@ -99,7 +102,7 @@ export default function Profile({ user }: ProfileProps) {
                                             Nama Lengkap
                                         </p>
                                         <p className="mt-1 font-semibold text-gray-900 dark:text-white wrap-break-word">
-                                            {user.name}
+                                            {auth.user?.name}
                                         </p>
                                     </div>
                                 </div>
@@ -117,7 +120,7 @@ export default function Profile({ user }: ProfileProps) {
                                             Alamat Email
                                         </p>
                                         <p className="mt-1 font-semibold text-gray-900 dark:text-white break-all">
-                                            {user.email}
+                                            {auth.user?.email}
                                         </p>
                                     </div>
                                 </div>

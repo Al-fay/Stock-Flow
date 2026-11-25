@@ -8,6 +8,11 @@ use App\Http\Controllers\Auth\RefreshTokenController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Inventory\InventoryController;
+use App\Http\Controllers\Inventory\StockInController;
+use App\Http\Controllers\Inventory\StockMovementController;
+use App\Http\Controllers\Inventory\StockMovementDetailController;
+use App\Http\Controllers\Inventory\StockOpnameController;
+use App\Http\Controllers\Inventory\StockOutController;
 use App\Http\Controllers\Inventory\StockOverviewController;
 use App\Http\Controllers\MasterData\CategoryController;
 use App\Http\Controllers\MasterData\CustomerController;
@@ -117,6 +122,49 @@ Route::middleware([JwtAuthenticate::class])->group(function () {
 
     Route::get('/inventory/overview', [StockOverviewController::class, 'index'])
         ->name('inventory.overview');
+
+    Route::prefix('inventory/opname')
+        ->name('inventory.opname.')
+        ->group(function () {
+            Route::get('/', [StockOpnameController::class, 'index'])
+                ->name('index');
+
+            Route::post('/', [StockOpnameController::class, 'store'])
+                ->name('store');
+
+            Route::get('/{opname}', [StockOpnameController::class, 'show'])
+                ->name('show');
+
+            Route::put('/{opname}', [StockOpnameController::class, 'update'])
+                ->name('update');
+
+            Route::post('/{opname}/post', [StockOpnameController::class, 'post'])
+                ->name('post');
+        });
+
+    Route::get('/inventory/movements', [StockMovementController::class, 'index'])
+        ->name('inventory.movements.index');
+
+    Route::get('/inventory/stock-in/create', [StockInController::class, 'create'])
+        ->name('inventory.stock-in.create');
+
+    Route::post('/inventory/stock-in', [StockInController::class, 'store'])
+        ->name('inventory.stock-in.store');
+
+    Route::get('/inventory/stock-out/create', [
+        StockOutController::class,
+        'create',
+    ])->name('inventory.stock-out.create');
+
+    Route::post('/inventory/stock-out', [
+        StockOutController::class,
+        'store',
+    ])->name('inventory.stock-out.store');
+
+    Route::get(
+        '/inventory/movements/{movement}',
+        [StockMovementDetailController::class, 'show']
+    )->name('inventory.movements.show');
 
     Route::post('/logout', [
         AuthenticatedSessionController::class,

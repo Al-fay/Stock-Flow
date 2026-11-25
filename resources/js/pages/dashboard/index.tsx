@@ -21,13 +21,7 @@ import {
 import { FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
-
-interface SharedProps {
-    [key: string]: unknown;
-    auth: {
-        user: { id: number; name: string; email: string } | null;
-    };
-}
+import { SharedPropsUser } from "@/types/user";
 
 interface DashboardProps extends Pick<
     ProductPageProps,
@@ -74,7 +68,7 @@ export default function Dashboard({
     chart,
     recentProducts,
 }: DashboardProps) {
-    const { auth } = usePage<SharedProps>().props;
+    const { auth } = usePage<SharedPropsUser>().props;
     const form = useForm<ProductForm>(initialForm);
     const [modalOpen, setModalOpen] = useState(false);
 
