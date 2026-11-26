@@ -15,6 +15,109 @@ use Inertia\Inertia;
 
 class StockOutController extends Controller
 {
+    public function index(Request $request)
+    {
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date'],
+            'per_page' => ['nullable', 'integer', 'in:10,25,50,100'],
+        ]);
+
+        $query = StockOut::query()
+            ->with([
+                'creator:id,name',
+                'items.product:id,sku,name,unit_id',
+                'items.product.unit:id,name,symbol',
+            ]);
+
+        if (!empty($filters['search'])) {
+            $search = $filters['search'];
+
+            $query->where(function ($q) use ($search) {
+                $q->where('reference_number', 'like', "%{$search}%")
+                    ->orWhere('notes', 'like', "%{$search}%")
+                    ->orWhereHas('items.product', function ($productQuery) use ($search) {
+                        $productQuery->where('name', 'like', "%{$search}%")
+                            ->orWhere('sku', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        if (!empty($filters['start_date'])) {
+            $query->whereDate('transaction_date', '>=', $filters['start_date']);
+        }
+
+        if (!empty($filters['end_date'])) {
+            $query->whereDate('transaction_date', '<=', $filters['end_date']);
+        }
+
+        $perPage = $filters['per_page'] ?? 10;
+
+        $stockOuts = $query
+            ->latest('transaction_date')
+            ->latest('id')
+            ->paginate($perPage)
+            ->withQueryString();
+
+        // Summary mengikuti filter tanggal dan pencarian.
+        $summaryQuery = StockOut::query();
+
+        if (!empty($filters['search'])) {
+            $search = $filters['search'];
+
+            $summaryQuery->where(function ($q) use ($search) {
+                $q->where('reference_number', 'like', "%{$search}%")
+                    ->orWhere('notes', 'like', "%{$search}%")
+                    ->orWhereHas('items.product', function ($productQuery) use ($search) {
+                        $productQuery->where('name', 'like', "%{$search}%")
+                            ->orWhere('sku', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        if (!empty($filters['start_date'])) {
+            $summaryQuery->whereDate(
+                'transaction_date',
+                '>=',
+                $filters['start_date']
+            );
+        }
+
+        if (!empty($filters['end_date'])) {
+            $summaryQuery->whereDate(
+                'transaction_date',
+                '<=',
+                $filters['end_date']
+            );
+        }
+
+        $summary = [
+            'total_transactions' => (clone $summaryQuery)->count(),
+
+            'total_quantity' => (clone $summaryQuery)
+                ->sum('total_quantity'),
+
+            'total_amount' => (clone $summaryQuery)
+                ->sum('total_amount'),
+
+            'today_transactions' => StockOut::query()
+                ->whereDate('transaction_date', today())
+                ->count(),
+        ];
+
+        return Inertia::render('inventory/stock-out/index', [
+            'stockOuts' => $stockOuts,
+            'summary' => $summary,
+            'filters' => [
+                'search' => $filters['search'] ?? '',
+                'start_date' => $filters['start_date'] ?? '',
+                'end_date' => $filters['end_date'] ?? '',
+                'per_page' => $perPage,
+            ],
+        ]);
+    }
+
     public function create()
     {
         return Inertia::render('inventory/stock-out/create', [
@@ -260,5 +363,32 @@ class StockOutController extends Controller
                 'success',
                 "Stock Out {$stockOut->reference_number} berhasil disimpan."
             );
+    }
+
+    public function show(string $reference)
+    {
+        $stockOut = StockOut::query()
+            ->with([
+                'creator:id,name',
+                'items.product:id,sku,name,unit_id',
+                'items.product.unit:id,name,symbol',
+            ])
+            ->where('reference_number', $reference)
+            ->firstOrFail();
+
+        $movements = StockMovement::query()
+            ->with([
+                'product:id,sku,name,unit_id',
+                'product.unit:id,name,symbol',
+                'user:id,name',
+            ])
+            ->where('reference_number', $reference)
+            ->orderBy('id')
+            ->get();
+
+        return Inertia::render('inventory/stock-out/show', [
+            'stockOut' => $stockOut,
+            'movements' => $movements,
+        ]);
     }
 }

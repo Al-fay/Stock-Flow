@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Inventory;
 
 use App\Http\Controllers\Controller;
+use App\Models\StockIn;
 use App\Models\StockMovement;
+use App\Models\StockOpname;
+use App\Models\StockOut;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -57,12 +60,6 @@ class StockMovementController extends Controller
             $query->whereDate('created_at', '<=', $validated['end_date']);
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Summary
-        |--------------------------------------------------------------------------
-        */
-
         $summary = (clone $query)
             ->selectRaw("
                 COUNT(*) AS total_transactions,
@@ -101,12 +98,6 @@ class StockMovementController extends Controller
             ")
             ->first();
 
-        /*
-        |--------------------------------------------------------------------------
-        | Pagination
-        |--------------------------------------------------------------------------
-        */
-
         $movements = $query
             ->orderByDesc('created_at')
             ->orderByDesc('id')
@@ -130,6 +121,68 @@ class StockMovementController extends Controller
                 'start_date' => $validated['start_date'] ?? '',
                 'end_date' => $validated['end_date'] ?? '',
             ],
+        ]);
+    }
+
+    public function show(string $reference)
+    {
+        $movements = StockMovement::query()
+            ->with([
+                'product:id,sku,name,unit_id',
+                'product.unit:id,name,symbol',
+                'supplier:id,name',
+                'user:id,name',
+            ])
+            ->where('reference_number', $reference)
+            ->orderBy('id')
+            ->get();
+
+        if ($movements->isEmpty()) {
+            abort(404, 'Stock movement tidak ditemukan.');
+        }
+
+        $firstMovement = $movements->first();
+
+        $type = $firstMovement->movement_type;
+
+        $transaction = null;
+
+        if (str_starts_with($reference, 'SI-')) {
+            $transaction = StockIn::query()
+                ->with([
+                    'supplier:id,name',
+                    'creator:id,name',
+                    'items.product:id,sku,name,unit_id',
+                    'items.product.unit:id,name,symbol',
+                ])
+                ->where('reference_number', $reference)
+                ->first();
+        } elseif (str_starts_with($reference, 'SO-')) {
+            $transaction = StockOut::query()
+                ->with([
+                    'creator:id,name',
+                    'items.product:id,sku,name,unit_id',
+                    'items.product.unit:id,name,symbol',
+                ])
+                ->where('reference_number', $reference)
+                ->first();
+        } elseif (str_starts_with($reference, 'OPN-')) {
+            $transaction = StockOpname::query()
+                ->with([
+                    'creator:id,name',
+                    'poster:id,name',
+                    'items.product:id,sku,name,unit_id',
+                    'items.product.unit:id,name,symbol',
+                ])
+                ->where('code', $reference)
+                ->first();
+        }
+
+        return Inertia::render('inventory/movements/show', [
+            'reference' => $reference,
+            'movements' => $movements,
+            'transaction' => $transaction,
+            'transaction_type' => $type,
         ]);
     }
 }

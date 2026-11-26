@@ -277,7 +277,7 @@ export default function StockOutCreate({ products }: Props) {
                             type="button"
                             variant="outline"
                             size="icon"
-                            onClick={() => router.visit("/inventory/movements")}
+                            onClick={() => router.visit("/inventory/stock-out")}
                         >
                             <ArrowLeft className="size-4" />
                         </Button>

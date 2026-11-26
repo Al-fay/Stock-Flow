@@ -16,6 +16,80 @@ use Inertia\Inertia;
 
 class StockInController extends Controller
 {
+    public function index(Request $request)
+    {
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'per_page' => ['nullable', 'integer', 'in:10,25,50,100'],
+        ]);
+
+        $search = $validated['search'] ?? '';
+        $perPage = (int) ($validated['per_page'] ?? 10);
+
+        $query = StockIn::query()
+            ->with([
+                'supplier:id,name',
+                'creator:id,name',
+            ])
+            ->withCount('items');
+
+        // Search
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('reference_number', 'like', "%{$search}%")
+                    ->orWhere('notes', 'like', "%{$search}%")
+                    ->orWhereHas('supplier', function ($supplierQuery) use ($search) {
+                        $supplierQuery->where('name', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        // Date filter
+        if (!empty($validated['start_date'])) {
+            $query->whereDate('transaction_date', '>=', $validated['start_date']);
+        }
+
+        if (!empty($validated['end_date'])) {
+            $query->whereDate('transaction_date', '<=', $validated['end_date']);
+        }
+
+        // Summary menggunakan filter yang sama
+        $summaryQuery = clone $query;
+
+        $summary = [
+            'total_transactions' => (clone $summaryQuery)->count(),
+
+            'total_quantity' => (clone $summaryQuery)
+                ->sum('total_quantity'),
+
+            'total_amount' => (clone $summaryQuery)
+                ->sum('total_amount'),
+
+            'today_transactions' => (clone $summaryQuery)
+                ->whereDate('transaction_date', today())
+                ->count(),
+        ];
+
+        $stockIns = $query
+            ->orderByDesc('transaction_date')
+            ->orderByDesc('id')
+            ->paginate($perPage)
+            ->withQueryString();
+
+        return Inertia::render('inventory/stock-in/index', [
+            'stockIns' => $stockIns,
+            'summary' => $summary,
+            'filters' => [
+                'search' => $search,
+                'start_date' => $validated['start_date'] ?? '',
+                'end_date' => $validated['end_date'] ?? '',
+                'per_page' => $perPage,
+            ],
+        ]);
+    }
+
     public function create()
     {
         return Inertia::render('inventory/stock-in/create', [
@@ -226,5 +300,33 @@ class StockInController extends Controller
         return redirect()
             ->route('inventory.stock-in.create')
             ->with('success', "Stock In {$stockIn->reference_number} berhasil disimpan.");
+    }
+
+    public function show(string $reference)
+    {
+        $stockIn = StockIn::query()
+            ->with([
+                'supplier:id,name',
+                'creator:id,name',
+                'items.product:id,sku,name,unit_id',
+                'items.product.unit:id,name,symbol',
+            ])
+            ->where('reference_number', $reference)
+            ->firstOrFail();
+
+        $movements = StockMovement::query()
+            ->with([
+                'product:id,sku,name,unit_id',
+                'product.unit:id,name,symbol',
+                'user:id,name',
+            ])
+            ->where('reference_number', $reference)
+            ->orderBy('id')
+            ->get();
+
+        return Inertia::render('inventory/stock-in/show', [
+            'stockIn' => $stockIn,
+            'movements' => $movements,
+        ]);
     }
 }

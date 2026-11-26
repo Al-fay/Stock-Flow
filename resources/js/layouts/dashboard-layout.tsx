@@ -27,6 +27,10 @@ import {
     ClipboardCheck,
     ArrowDownUp,
     House,
+    ArrowUpFromLine,
+    RotateCcw,
+    ArrowDownFromLine,
+    ChartNoAxesCombined,
 } from "lucide-react";
 import {
     DropdownMenu,
@@ -76,6 +80,26 @@ const navigation = [
                 label: "Stock Movement",
                 href: "/inventory/movements",
                 icon: ArrowDownUp,
+            },
+            {
+                label: "Stock In",
+                href: "/inventory/stock-in",
+                icon: ArrowDownFromLine,
+            },
+            {
+                label: "Stock Out",
+                href: "/inventory/stock-out",
+                icon: ArrowUpFromLine,
+            },
+            {
+                label: "Stock Return",
+                href: "/inventory/stock-return",
+                icon: RotateCcw,
+            },
+            {
+                label: "Inventory Reports",
+                href: "/inventory/reports",
+                icon: ChartNoAxesCombined,
             },
             {
                 label: "Products",

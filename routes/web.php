@@ -8,12 +8,13 @@ use App\Http\Controllers\Auth\RefreshTokenController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Inventory\InventoryController;
+use App\Http\Controllers\Inventory\InventoryReportController;
 use App\Http\Controllers\Inventory\StockInController;
 use App\Http\Controllers\Inventory\StockMovementController;
-use App\Http\Controllers\Inventory\StockMovementDetailController;
 use App\Http\Controllers\Inventory\StockOpnameController;
 use App\Http\Controllers\Inventory\StockOutController;
 use App\Http\Controllers\Inventory\StockOverviewController;
+use App\Http\Controllers\Inventory\StockReturnController;
 use App\Http\Controllers\MasterData\CategoryController;
 use App\Http\Controllers\MasterData\CustomerController;
 use App\Http\Controllers\MasterData\ProductController;
@@ -142,14 +143,29 @@ Route::middleware([JwtAuthenticate::class])->group(function () {
                 ->name('post');
         });
 
+    // stok move
     Route::get('/inventory/movements', [StockMovementController::class, 'index'])
         ->name('inventory.movements.index');
+
+    Route::get('/inventory/movements/{reference}', [StockMovementController::class, 'show'])
+        ->name('inventory.movements.show');
+
+    // stok in
+    Route::get('/inventory/stock-in', [StockInController::class, 'index'])
+        ->name('inventory.stock-in.index');
 
     Route::get('/inventory/stock-in/create', [StockInController::class, 'create'])
         ->name('inventory.stock-in.create');
 
     Route::post('/inventory/stock-in', [StockInController::class, 'store'])
         ->name('inventory.stock-in.store');
+
+    Route::get('/inventory/stock-in/{reference}', [StockInController::class, 'show'])
+        ->name('inventory.stock-in.show');
+
+    // stok out 
+    Route::get('/inventory/stock-out', [StockOutController::class, 'index'])
+        ->name('inventory.stock-out.index');
 
     Route::get('/inventory/stock-out/create', [
         StockOutController::class,
@@ -161,10 +177,44 @@ Route::middleware([JwtAuthenticate::class])->group(function () {
         'store',
     ])->name('inventory.stock-out.store');
 
-    Route::get(
-        '/inventory/movements/{movement}',
-        [StockMovementDetailController::class, 'show']
-    )->name('inventory.movements.show');
+    Route::get('/inventory/stock-out/{reference}', [StockOutController::class, 'show'])
+        ->name('inventory.stock-out.show');
+
+    // stok return
+    Route::prefix('inventory/stock-return')
+        ->name('inventory.stock-return.')
+        ->group(function () {
+            Route::get('/', [StockReturnController::class, 'index'])->name('index');
+            Route::get('/create', [StockReturnController::class, 'create'])->name('create');
+            Route::post('/', [StockReturnController::class, 'store'])->name('store');
+
+            Route::get('/{reference}', [StockReturnController::class, 'show'])->name('show');
+        });
+
+    // report
+    Route::prefix('inventory/reports')
+        ->name('inventory.reports.')
+        ->group(function () {
+            Route::get('/', [InventoryReportController::class, 'index'])
+                ->name('index');
+
+            Route::get('/export', [InventoryReportController::class, 'export'])
+                ->name('export');
+        });
+
+    // pdf
+    Route::prefix('inventory/reports')
+        ->name('inventory.reports.')
+        ->group(function () {
+            Route::get('/', [InventoryReportController::class, 'index'])
+                ->name('index');
+
+            Route::get('/export', [InventoryReportController::class, 'export'])
+                ->name('export');
+
+            Route::get('/export/pdf', [InventoryReportController::class, 'exportPdf'])
+                ->name('export.pdf');
+        });
 
     Route::post('/logout', [
         AuthenticatedSessionController::class,

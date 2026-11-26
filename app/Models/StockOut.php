@@ -11,8 +11,6 @@ class StockOut extends Model
     protected $fillable = [
         'reference_number',
         'transaction_date',
-        'transaction_type',
-        'destination',
         'total_quantity',
         'total_amount',
         'status',
@@ -34,5 +32,10 @@ class StockOut extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function returns(): HasMany
+    {
+        return $this->hasMany(StockReturn::class);
     }
 }

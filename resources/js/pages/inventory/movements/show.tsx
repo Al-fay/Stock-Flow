@@ -1,21 +1,22 @@
 import { Head, router } from "@inertiajs/react";
-import DashboardLayout from "@/layouts/dashboard-layout";
-
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-
+import { useMemo } from "react";
 import {
     ArrowLeft,
     ArrowDownToLine,
     ArrowUpFromLine,
     RefreshCcw,
     AlertTriangle,
-    FileText,
     Package,
-    UserRound,
+    FileText,
     CalendarDays,
-    Hash,
+    User,
+    Truck,
 } from "lucide-react";
+
+import DashboardLayout from "@/layouts/dashboard-layout";
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 interface Unit {
     id: number;
@@ -40,134 +41,79 @@ interface User {
     name: string;
 }
 
-type MovementType = "IN" | "OUT" | "ADJUSTMENT" | "DAMAGE" | string;
-
-interface StockMovement {
+interface Movement {
     id: number;
-    product_id: number;
-    supplier_id?: number | null;
-    user_id?: number | null;
-    movement_type: MovementType;
+    product: Product | null;
+    supplier?: Supplier | null;
+    user?: User | null;
+    movement_type: "IN" | "OUT" | "ADJUSTMENT" | "DAMAGE";
     quantity: string | number;
     reference_number?: string | null;
     notes?: string | null;
     created_at: string;
-    product?: Product | null;
-    supplier?: Supplier | null;
-    user?: User | null;
 }
 
-interface StockInItem {
+interface TransactionItem {
     id: number;
     product_id: number;
-    quantity: string | number;
-    unit_cost: string | number;
-    subtotal: string | number;
     product?: Product | null;
-}
-
-interface StockOutItem {
-    id: number;
-    product_id: number;
-    quantity: string | number;
-    unit_price: string | number;
-    subtotal: string | number;
-    product?: Product | null;
-}
-
-interface StockInTransaction {
-    reference_number: string;
-    transaction_date: string;
-    total_quantity: string | number;
-    total_amount: string | number;
-    payment_method: string;
-    status: string;
+    quantity?: string | number;
+    system_stock?: string | number;
+    physical_stock?: string | number;
+    difference?: string | number;
+    unit_cost?: string | number;
+    unit_price?: string | number;
+    subtotal?: string | number;
     notes?: string | null;
-    supplier?: Supplier | null;
-    creator?: User | null;
-    items?: StockInItem[];
-}
-
-interface StockOutTransaction {
-    reference_number: string;
-    transaction_date: string;
-    transaction_type: string;
-    destination?: string | null;
-    total_quantity: string | number;
-    total_amount: string | number;
-    status: string;
-    notes?: string | null;
-    creator?: User | null;
-    items?: StockOutItem[];
-}
-
-interface StockOpnameItem {
-    id: number;
-    system_stock: string | number;
-    physical_stock: string | number;
-    difference: string | number;
-    notes?: string | null;
-    product?: Product | null;
-}
-
-interface StockOpnameTransaction {
-    code: string;
-    opname_date: string;
-    status: string;
-    notes?: string | null;
-    creator?: User | null;
-    poster?: User | null;
-    posted_at?: string | null;
-    items?: StockOpnameItem[];
+    is_counted?: boolean;
 }
 
 interface Transaction {
-    type: "STOCK_IN" | "STOCK_OUT" | "STOCK_OPNAME" | "MOVEMENT";
-    stockIn: StockInTransaction | null;
-    stockOut: StockOutTransaction | null;
-    stockOpname: StockOpnameTransaction | null;
+    id: number;
+    reference_number?: string;
+    code?: string;
+    transaction_date?: string;
+    opname_date?: string;
+    status?: string;
+    transaction_type?: string;
+    destination?: string | null;
+    payment_method?: string;
+    total_quantity?: string | number;
+    total_amount?: string | number;
+    notes?: string | null;
+    supplier?: Supplier | null;
+    creator?: User | null;
+    poster?: User | null;
+    posted_at?: string | null;
+    items?: TransactionItem[];
 }
 
 interface Props {
-    movement: StockMovement;
-    relatedMovements: StockMovement[];
-    transaction: Transaction;
+    reference: string;
+    movements: Movement[];
+    transaction: Transaction | null;
+    transaction_type: string;
 }
 
-function parseNumber(value: string | number | null | undefined) {
-    const number = Number(value);
-    return Number.isFinite(number) ? number : 0;
-}
-
-function formatNumber(value: string | number) {
+function formatNumber(value: string | number | null | undefined) {
     return new Intl.NumberFormat("id-ID", {
         maximumFractionDigits: 3,
-    }).format(parseNumber(value));
+    }).format(Number(value ?? 0));
 }
 
-function formatCurrency(value: string | number) {
+function formatCurrency(value: string | number | null | undefined) {
     return new Intl.NumberFormat("id-ID", {
         style: "currency",
         currency: "IDR",
         maximumFractionDigits: 2,
-    }).format(parseNumber(value));
+    }).format(Number(value ?? 0));
 }
 
 function formatDate(value?: string | null) {
     if (!value) return "-";
 
     const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
 
-    return new Intl.DateTimeFormat("id-ID", {
-        dateStyle: "medium",
-    }).format(date);
-}
-
-function formatDateTime(value?: string | null) {
-    if (!value) return "-";
-
-    const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
 
     return new Intl.DateTimeFormat("id-ID", {
@@ -176,134 +122,112 @@ function formatDateTime(value?: string | null) {
     }).format(date);
 }
 
-function movementLabel(type: MovementType) {
+function formatDateOnly(value?: string | null) {
+    if (!value) return "-";
+
+    // Date-only values are formatted without timezone conversion.
+    const parts = value.substring(0, 10).split("-");
+
+    if (parts.length !== 3) return value;
+
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+function getMovementLabel(type: string) {
     switch (type) {
         case "IN":
             return "Stock In";
+
         case "OUT":
             return "Stock Out";
+
         case "ADJUSTMENT":
             return "Adjustment";
+
         case "DAMAGE":
             return "Damage";
+
         default:
             return type;
     }
 }
 
-function movementIcon(type: MovementType) {
+function getMovementColor(type: string) {
     switch (type) {
         case "IN":
-            return ArrowDownToLine;
+            return "border-green-500/20 bg-green-500/5 text-green-600";
+
         case "OUT":
-            return ArrowUpFromLine;
+            return "border-blue-500/20 bg-blue-500/5 text-blue-600";
+
         case "ADJUSTMENT":
-            return RefreshCcw;
+            return "border-amber-500/20 bg-amber-500/5 text-amber-600";
+
         case "DAMAGE":
-            return AlertTriangle;
+            return "border-red-500/20 bg-red-500/5 text-red-600";
+
         default:
-            return Package;
+            return "border-border bg-muted text-muted-foreground";
     }
 }
 
-function quantityClass(type: MovementType, quantity: number) {
-    if (type === "IN" || quantity > 0) {
-        return "text-emerald-600 dark:text-emerald-400";
-    }
-
-    if (type === "OUT" || type === "DAMAGE" || quantity < 0) {
-        return "text-destructive";
-    }
-
-    return "text-muted-foreground";
-}
-
-function transactionLabel(type: Transaction["type"]) {
+function getMovementIcon(type: string) {
     switch (type) {
-        case "STOCK_IN":
-            return "Penerimaan Barang";
-        case "STOCK_OUT":
-            return "Pengeluaran Barang";
-        case "STOCK_OPNAME":
-            return "Stock Opname";
+        case "IN":
+            return <ArrowDownToLine className="size-4" />;
+
+        case "OUT":
+            return <ArrowUpFromLine className="size-4" />;
+
+        case "DAMAGE":
+            return <AlertTriangle className="size-4" />;
+
         default:
-            return "Pergerakan Stok";
+            return <RefreshCcw className="size-4" />;
     }
+}
+
+function getTransactionLabel(reference: string) {
+    if (reference.startsWith("SI-")) return "Penerimaan Barang";
+    if (reference.startsWith("SO-")) return "Barang Keluar";
+    if (reference.startsWith("OPN-")) return "Stock Opname";
+
+    return "Stock Movement";
 }
 
 export default function StockMovementShow({
-    movement,
-    relatedMovements,
+    reference,
+    movements,
     transaction,
+    transaction_type,
 }: Props) {
-    const stockIn = transaction.stockIn;
-    const stockOut = transaction.stockOut;
-    const opname = transaction.stockOpname;
+    const transactionItems = transaction?.items ?? [];
 
-    const totalIn = relatedMovements
-        .filter((item) => item.movement_type === "IN")
-        .reduce(
-            (total, item) => total + Math.abs(parseNumber(item.quantity)),
+    const totalMovementQuantity = useMemo(() => {
+        return movements.reduce(
+            (total, movement) => total + Math.abs(Number(movement.quantity)),
             0,
         );
+    }, [movements]);
 
-    const totalOut = relatedMovements
-        .filter((item) => item.movement_type === "OUT")
-        .reduce(
-            (total, item) => total + Math.abs(parseNumber(item.quantity)),
-            0,
-        );
-
-    const totalAdjustment = relatedMovements
-        .filter((item) => item.movement_type === "ADJUSTMENT")
-        .reduce((total, item) => total + parseNumber(item.quantity), 0);
-
-    const totalDamage = relatedMovements
-        .filter((item) => item.movement_type === "DAMAGE")
-        .reduce(
-            (total, item) => total + Math.abs(parseNumber(item.quantity)),
-            0,
-        );
-
-    const headerReference =
-        stockIn?.reference_number ??
-        stockOut?.reference_number ??
-        opname?.code ??
-        movement.reference_number ??
-        `MOV-${movement.id}`;
+    const totalItems = transactionItems.length || movements.length;
 
     const transactionDate =
-        stockIn?.transaction_date ??
-        stockOut?.transaction_date ??
-        opname?.opname_date ??
-        movement.created_at;
+        transaction?.transaction_date ??
+        transaction?.opname_date ??
+        movements[0]?.created_at;
 
-    const transactionNotes =
-        stockIn?.notes ?? stockOut?.notes ?? opname?.notes ?? movement.notes;
-
-    const createdBy =
-        stockIn?.creator?.name ??
-        stockOut?.creator?.name ??
-        opname?.creator?.name ??
-        movement.user?.name ??
-        "-";
-
-    const itemCount =
-        stockIn?.items?.length ??
-        stockOut?.items?.length ??
-        opname?.items?.length ??
-        relatedMovements.length;
+    const movementType = transaction_type;
 
     return (
         <>
-            <Head title={`Movement ${headerReference}`} />
+            <Head title={`Detail ${reference}`} />
 
             <div className="space-y-6">
-                {/* Page header */}
+                {/* Header */}
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-start gap-3">
                         <Button
-                            type="button"
                             variant="outline"
                             size="icon"
                             onClick={() => router.visit("/inventory/movements")}
@@ -312,17 +236,135 @@ export default function StockMovementShow({
                         </Button>
 
                         <div>
-                            <h1 className="text-2xl font-semibold tracking-tight">
+                            <h1 className="text-2xl font-bold tracking-tight">
                                 Detail Stock Movement
                             </h1>
-                            <p className="text-sm text-muted-foreground">
-                                Detail transaksi dan riwayat perubahan stok.
+
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                Detail transaksi dan riwayat pergerakan stok.
                             </p>
                         </div>
                     </div>
+
+                    <span
+                        className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium ${getMovementColor(movementType)}`}
+                    >
+                        {getMovementIcon(movementType)}
+                        {getMovementLabel(movementType)}
+                    </span>
                 </div>
 
-                {/* Reference / transaction information */}
+                {/* Reference */}
+                <Card>
+                    <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <p className="text-sm text-muted-foreground">
+                                Nomor Referensi
+                            </p>
+
+                            <h2 className="mt-1 text-xl font-bold tracking-tight">
+                                {reference}
+                            </h2>
+
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                {getTransactionLabel(reference)}
+                            </p>
+                        </div>
+
+                        {transaction?.status && (
+                            <span className="inline-flex w-fit rounded-full border px-3 py-1 text-xs font-medium">
+                                {transaction.status}
+                            </span>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Summary */}
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <Card>
+                        <CardContent className="p-5">
+                            <div className="flex items-center gap-3">
+                                <div className="rounded-lg bg-primary/10 p-3 text-primary">
+                                    <Package className="size-5" />
+                                </div>
+
+                                <div>
+                                    <p className="text-sm text-muted-foreground">
+                                        Total Produk
+                                    </p>
+
+                                    <p className="text-2xl font-bold">
+                                        {totalItems}
+                                    </p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardContent className="p-5">
+                            <div className="flex items-center gap-3">
+                                <div className="rounded-lg bg-blue-500/10 p-3 text-blue-600">
+                                    <RefreshCcw className="size-5" />
+                                </div>
+
+                                <div>
+                                    <p className="text-sm text-muted-foreground">
+                                        Total Pergerakan
+                                    </p>
+
+                                    <p className="text-2xl font-bold">
+                                        {formatNumber(totalMovementQuantity)}
+                                    </p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardContent className="p-5">
+                            <div className="flex items-center gap-3">
+                                <div className="rounded-lg bg-amber-500/10 p-3 text-amber-600">
+                                    <CalendarDays className="size-5" />
+                                </div>
+
+                                <div>
+                                    <p className="text-sm text-muted-foreground">
+                                        Tanggal Transaksi
+                                    </p>
+
+                                    <p className="text-sm font-semibold">
+                                        {formatDateOnly(transactionDate)}
+                                    </p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardContent className="p-5">
+                            <div className="flex items-center gap-3">
+                                <div className="rounded-lg bg-emerald-500/10 p-3 text-emerald-600">
+                                    <User className="size-5" />
+                                </div>
+
+                                <div>
+                                    <p className="text-sm text-muted-foreground">
+                                        Dibuat Oleh
+                                    </p>
+
+                                    <p className="text-sm font-semibold">
+                                        {transaction?.creator?.name ??
+                                            movements[0]?.user?.name ??
+                                            "-"}
+                                    </p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* Transaction Information */}
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
@@ -332,512 +374,469 @@ export default function StockMovementShow({
                     </CardHeader>
 
                     <CardContent>
-                        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-                            <div className="space-y-1">
+                        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                            <div>
                                 <p className="text-sm text-muted-foreground">
                                     Referensi
                                 </p>
-                                <p className="font-semibold break-all">
-                                    {headerReference}
-                                </p>
+
+                                <p className="mt-1 font-medium">{reference}</p>
                             </div>
 
-                            <div className="space-y-1">
+                            <div>
                                 <p className="text-sm text-muted-foreground">
                                     Jenis Transaksi
                                 </p>
-                                <p className="font-medium">
-                                    {transactionLabel(transaction.type)}
+
+                                <p className="mt-1 font-medium">
+                                    {transaction?.transaction_type
+                                        ? transaction.transaction_type.replace(
+                                              "_",
+                                              " ",
+                                          )
+                                        : getMovementLabel(movementType)}
                                 </p>
                             </div>
 
-                            <div className="space-y-1">
+                            <div>
                                 <p className="text-sm text-muted-foreground">
                                     Tanggal
                                 </p>
-                                <p className="font-medium">
-                                    {formatDate(transactionDate)}
+
+                                <p className="mt-1 font-medium">
+                                    {formatDateOnly(transactionDate)}
                                 </p>
                             </div>
 
-                            <div className="space-y-1">
-                                <p className="text-sm text-muted-foreground">
-                                    Dibuat oleh
-                                </p>
-                                <p className="font-medium">{createdBy}</p>
-                            </div>
+                            {transaction?.supplier && (
+                                <div>
+                                    <p className="text-sm text-muted-foreground">
+                                        Supplier
+                                    </p>
 
-                            {stockIn && (
-                                <>
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">
-                                            Supplier
-                                        </p>
-                                        <p className="font-medium">
-                                            {stockIn.supplier?.name ?? "-"}
-                                        </p>
-                                    </div>
-
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">
-                                            Pembayaran
-                                        </p>
-                                        <p className="font-medium">
-                                            {stockIn.payment_method}
-                                        </p>
-                                    </div>
-                                </>
+                                    <p className="mt-1 flex items-center gap-2 font-medium">
+                                        <Truck className="size-4 text-muted-foreground" />
+                                        {transaction.supplier.name}
+                                    </p>
+                                </div>
                             )}
 
-                            {stockOut && (
-                                <>
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">
-                                            Tipe Pengeluaran
-                                        </p>
-                                        <p className="font-medium">
-                                            {stockOut.transaction_type}
-                                        </p>
-                                    </div>
+                            {transaction?.destination && (
+                                <div>
+                                    <p className="text-sm text-muted-foreground">
+                                        Tujuan
+                                    </p>
 
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">
-                                            Tujuan
-                                        </p>
-                                        <p className="font-medium">
-                                            {stockOut.destination || "-"}
-                                        </p>
-                                    </div>
-                                </>
+                                    <p className="mt-1 font-medium">
+                                        {transaction.destination}
+                                    </p>
+                                </div>
                             )}
 
-                            {opname && (
-                                <>
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">
-                                            Status Opname
-                                        </p>
-                                        <p className="font-medium">
-                                            {opname.status}
-                                        </p>
-                                    </div>
+                            {transaction?.payment_method && (
+                                <div>
+                                    <p className="text-sm text-muted-foreground">
+                                        Metode Pembayaran
+                                    </p>
 
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">
-                                            Diposting oleh
-                                        </p>
-                                        <p className="font-medium">
-                                            {opname.poster?.name ?? "-"}
-                                        </p>
-                                    </div>
-                                </>
+                                    <p className="mt-1 font-medium">
+                                        {transaction.payment_method}
+                                    </p>
+                                </div>
+                            )}
+
+                            {transaction?.poster && (
+                                <div>
+                                    <p className="text-sm text-muted-foreground">
+                                        Diposting Oleh
+                                    </p>
+
+                                    <p className="mt-1 font-medium">
+                                        {transaction.poster.name}
+                                    </p>
+                                </div>
+                            )}
+
+                            {transaction?.posted_at && (
+                                <div>
+                                    <p className="text-sm text-muted-foreground">
+                                        Waktu Posting
+                                    </p>
+
+                                    <p className="mt-1 font-medium">
+                                        {formatDate(transaction.posted_at)}
+                                    </p>
+                                </div>
                             )}
                         </div>
 
-                        {transactionNotes && (
-                            <div className="mt-5 rounded-lg bg-muted/50 p-4">
-                                <p className="mb-1 text-sm font-medium">
+                        {transaction?.notes && (
+                            <div className="mt-5 border-t pt-4">
+                                <p className="text-sm text-muted-foreground">
                                     Catatan
                                 </p>
-                                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                                    {transactionNotes}
+
+                                <p className="mt-2 whitespace-pre-wrap text-sm">
+                                    {transaction.notes}
                                 </p>
                             </div>
                         )}
                     </CardContent>
                 </Card>
 
-                {/* Summary cards */}
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                    <Card>
-                        <CardContent className="flex items-center justify-between p-5">
-                            <div>
-                                <p className="text-sm text-muted-foreground">
-                                    Total Barang Masuk
-                                </p>
-                                <p className="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                                    +{formatNumber(totalIn)}
-                                </p>
-                            </div>
-                            <div className="rounded-lg bg-emerald-500/10 p-3 text-emerald-600 dark:text-emerald-400">
-                                <ArrowDownToLine className="size-5" />
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardContent className="flex items-center justify-between p-5">
-                            <div>
-                                <p className="text-sm text-muted-foreground">
-                                    Total Barang Keluar
-                                </p>
-                                <p className="mt-1 text-2xl font-bold text-destructive">
-                                    -{formatNumber(totalOut)}
-                                </p>
-                            </div>
-                            <div className="rounded-lg bg-destructive/10 p-3 text-destructive">
-                                <ArrowUpFromLine className="size-5" />
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardContent className="flex items-center justify-between p-5">
-                            <div>
-                                <p className="text-sm text-muted-foreground">
-                                    Adjustment
-                                </p>
-                                <p className="mt-1 text-2xl font-bold">
-                                    {totalAdjustment > 0 ? "+" : ""}
-                                    {formatNumber(totalAdjustment)}
-                                </p>
-                            </div>
-                            <div className="rounded-lg bg-primary/10 p-3 text-primary">
-                                <RefreshCcw className="size-5" />
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardContent className="flex items-center justify-between p-5">
-                            <div>
-                                <p className="text-sm text-muted-foreground">
-                                    Damage
-                                </p>
-                                <p className="mt-1 text-2xl font-bold text-destructive">
-                                    -{formatNumber(totalDamage)}
-                                </p>
-                            </div>
-                            <div className="rounded-lg bg-destructive/10 p-3 text-destructive">
-                                <AlertTriangle className="size-5" />
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-
-                {/* Transaction items for Stock In / Out */}
-                {(stockIn?.items || stockOut?.items) && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Item Transaksi</CardTitle>
-                        </CardHeader>
-
-                        <CardContent>
-                            <div className="overflow-x-auto rounded-lg border">
-                                <table className="w-full text-sm">
-                                    <thead className="bg-muted/50">
-                                        <tr>
-                                            <th className="px-4 py-3 text-left">
-                                                Produk
-                                            </th>
-                                            <th className="px-4 py-3 text-right">
-                                                Quantity
-                                            </th>
-                                            <th className="px-4 py-3 text-right">
-                                                Harga
-                                            </th>
-                                            <th className="px-4 py-3 text-right">
-                                                Subtotal
-                                            </th>
-                                        </tr>
-                                    </thead>
-
-                                    <tbody>
-                                        {(
-                                            stockIn?.items ??
-                                            stockOut?.items ??
-                                            []
-                                        ).map((item) => {
-                                            const product = item.product;
-                                            const isIn = Boolean(stockIn);
-                                            const quantity = parseNumber(
-                                                item.quantity,
-                                            );
-                                            const price = isIn
-                                                ? parseNumber(
-                                                      (item as StockInItem)
-                                                          .unit_cost,
-                                                  )
-                                                : parseNumber(
-                                                      (item as StockOutItem)
-                                                          .unit_price,
-                                                  );
-                                            const subtotal = parseNumber(
-                                                item.subtotal,
-                                            );
-
-                                            return (
-                                                <tr
-                                                    key={item.id}
-                                                    className="border-t"
-                                                >
-                                                    <td className="px-4 py-3">
-                                                        <p className="font-medium">
-                                                            {product?.name ??
-                                                                "-"}
-                                                        </p>
-                                                        <p className="text-xs text-muted-foreground">
-                                                            {product?.sku ??
-                                                                "-"}
-                                                        </p>
-                                                    </td>
-                                                    <td className="px-4 py-3 text-right whitespace-nowrap">
-                                                        {formatNumber(quantity)}{" "}
-                                                        {product?.unit
-                                                            ?.symbol ?? ""}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-right whitespace-nowrap">
-                                                        {formatCurrency(price)}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-right font-medium whitespace-nowrap">
-                                                        {formatCurrency(
-                                                            subtotal,
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <div className="mt-4 flex justify-end">
-                                <div className="w-full max-w-xs space-y-2 border-t pt-4">
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">
-                                            Total Quantity
-                                        </span>
-                                        <span className="font-medium">
-                                            {formatNumber(
-                                                stockIn?.total_quantity ??
-                                                    stockOut?.total_quantity ??
-                                                    0,
-                                            )}
-                                        </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="font-medium">
-                                            Total
-                                        </span>
-                                        <span className="text-lg font-bold">
-                                            {formatCurrency(
-                                                stockIn?.total_amount ??
-                                                    stockOut?.total_amount ??
-                                                    0,
-                                            )}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                )}
-
-                {/* Stock opname items */}
-                {opname?.items && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Detail Stock Opname</CardTitle>
-                        </CardHeader>
-
-                        <CardContent>
-                            <div className="overflow-x-auto rounded-lg border">
-                                <table className="w-full text-sm">
-                                    <thead className="bg-muted/50">
-                                        <tr>
-                                            <th className="px-4 py-3 text-left">
-                                                Produk
-                                            </th>
-                                            <th className="px-4 py-3 text-right">
-                                                Stok Sistem
-                                            </th>
-                                            <th className="px-4 py-3 text-right">
-                                                Stok Fisik
-                                            </th>
-                                            <th className="px-4 py-3 text-right">
-                                                Selisih
-                                            </th>
-                                        </tr>
-                                    </thead>
-
-                                    <tbody>
-                                        {opname.items.map((item) => (
-                                            <tr
-                                                key={item.id}
-                                                className="border-t"
-                                            >
-                                                <td className="px-4 py-3">
-                                                    <p className="font-medium">
-                                                        {item.product?.name ??
-                                                            "-"}
-                                                    </p>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {item.product?.sku ??
-                                                            "-"}
-                                                    </p>
-                                                </td>
-                                                <td className="px-4 py-3 text-right">
-                                                    {formatNumber(
-                                                        item.system_stock,
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 text-right">
-                                                    {formatNumber(
-                                                        item.physical_stock,
-                                                    )}
-                                                </td>
-                                                <td
-                                                    className={`px-4 py-3 text-right font-medium ${
-                                                        parseNumber(
-                                                            item.difference,
-                                                        ) < 0
-                                                            ? "text-destructive"
-                                                            : parseNumber(
-                                                                    item.difference,
-                                                                ) > 0
-                                                              ? "text-emerald-600 dark:text-emerald-400"
-                                                              : ""
-                                                    }`}
-                                                >
-                                                    {parseNumber(
-                                                        item.difference,
-                                                    ) > 0
-                                                        ? "+"
-                                                        : ""}
-                                                    {formatNumber(
-                                                        item.difference,
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </CardContent>
-                    </Card>
-                )}
-
-                {/* Ledger entries */}
+                {/* Transaction Items */}
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Package className="size-5" />
-                            Ledger Pergerakan Stok
-                        </CardTitle>
+                        <CardTitle>Detail Produk</CardTitle>
                     </CardHeader>
 
                     <CardContent>
-                        <div className="mb-4 flex flex-wrap gap-3 text-sm text-muted-foreground">
-                            <span className="flex items-center gap-2">
-                                <Hash className="size-4" />
-                                {relatedMovements.length} pergerakan
-                            </span>
-                            <span className="flex items-center gap-2">
-                                <CalendarDays className="size-4" />
-                                {formatDateTime(movement.created_at)}
-                            </span>
-                            <span className="flex items-center gap-2">
-                                <UserRound className="size-4" />
-                                {movement.user?.name ?? "-"}
-                            </span>
-                        </div>
-
                         <div className="overflow-x-auto rounded-lg border">
                             <table className="w-full text-sm">
                                 <thead className="bg-muted/50">
                                     <tr>
                                         <th className="px-4 py-3 text-left">
-                                            Tanggal
-                                        </th>
-                                        <th className="px-4 py-3 text-left">
                                             Produk
                                         </th>
-                                        <th className="px-4 py-3 text-left">
-                                            Tipe
-                                        </th>
+
                                         <th className="px-4 py-3 text-right">
                                             Quantity
                                         </th>
+
+                                        {transactionItems.some(
+                                            (item) =>
+                                                item.unit_cost !== undefined ||
+                                                item.unit_price !== undefined,
+                                        ) && (
+                                            <>
+                                                <th className="px-4 py-3 text-right">
+                                                    Harga
+                                                </th>
+
+                                                <th className="px-4 py-3 text-right">
+                                                    Subtotal
+                                                </th>
+                                            </>
+                                        )}
+
+                                        {transactionItems.some(
+                                            (item) =>
+                                                item.system_stock !== undefined,
+                                        ) && (
+                                            <>
+                                                <th className="px-4 py-3 text-right">
+                                                    Stok Sistem
+                                                </th>
+
+                                                <th className="px-4 py-3 text-right">
+                                                    Stok Fisik
+                                                </th>
+
+                                                <th className="px-4 py-3 text-right">
+                                                    Selisih
+                                                </th>
+                                            </>
+                                        )}
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    {transactionItems.length > 0
+                                        ? transactionItems.map((item) => {
+                                              const product = item.product;
+
+                                              return (
+                                                  <tr
+                                                      key={item.id}
+                                                      className="border-t"
+                                                  >
+                                                      <td className="px-4 py-3">
+                                                          <p className="font-medium">
+                                                              {product?.name ??
+                                                                  `Product #${item.product_id}`}
+                                                          </p>
+
+                                                          <p className="text-xs text-muted-foreground">
+                                                              {product?.sku ??
+                                                                  "-"}
+                                                          </p>
+                                                      </td>
+
+                                                      <td className="px-4 py-3 text-right">
+                                                          {formatNumber(
+                                                              item.quantity ??
+                                                                  item.physical_stock ??
+                                                                  0,
+                                                          )}
+
+                                                          <span className="ml-1 text-xs text-muted-foreground">
+                                                              {product?.unit
+                                                                  ?.symbol ??
+                                                                  ""}
+                                                          </span>
+                                                      </td>
+
+                                                      {(item.unit_cost !==
+                                                          undefined ||
+                                                          item.unit_price !==
+                                                              undefined) && (
+                                                          <>
+                                                              <td className="px-4 py-3 text-right">
+                                                                  {formatCurrency(
+                                                                      item.unit_cost ??
+                                                                          item.unit_price,
+                                                                  )}
+                                                              </td>
+
+                                                              <td className="px-4 py-3 text-right font-medium">
+                                                                  {formatCurrency(
+                                                                      item.subtotal,
+                                                                  )}
+                                                              </td>
+                                                          </>
+                                                      )}
+
+                                                      {item.system_stock !==
+                                                          undefined && (
+                                                          <>
+                                                              <td className="px-4 py-3 text-right">
+                                                                  {formatNumber(
+                                                                      item.system_stock,
+                                                                  )}
+                                                              </td>
+
+                                                              <td className="px-4 py-3 text-right">
+                                                                  {formatNumber(
+                                                                      item.physical_stock,
+                                                                  )}
+                                                              </td>
+
+                                                              <td
+                                                                  className={`px-4 py-3 text-right font-semibold ${
+                                                                      Number(
+                                                                          item.difference,
+                                                                      ) >= 0
+                                                                          ? "text-emerald-600"
+                                                                          : "text-red-600"
+                                                                  }`}
+                                                              >
+                                                                  {Number(
+                                                                      item.difference,
+                                                                  ) > 0
+                                                                      ? "+"
+                                                                      : ""}
+                                                                  {formatNumber(
+                                                                      item.difference,
+                                                                  )}
+                                                              </td>
+                                                          </>
+                                                      )}
+                                                  </tr>
+                                              );
+                                          })
+                                        : movements.map((movement) => (
+                                              <tr
+                                                  key={movement.id}
+                                                  className="border-t"
+                                              >
+                                                  <td className="px-4 py-3">
+                                                      <p className="font-medium">
+                                                          {movement.product
+                                                              ?.name ??
+                                                              "Produk tidak tersedia"}
+                                                      </p>
+
+                                                      <p className="text-xs text-muted-foreground">
+                                                          {movement.product
+                                                              ?.sku ?? "-"}
+                                                      </p>
+                                                  </td>
+
+                                                  <td className="px-4 py-3 text-right">
+                                                      <span
+                                                          className={`font-semibold ${
+                                                              Number(
+                                                                  movement.quantity,
+                                                              ) >= 0
+                                                                  ? "text-emerald-600"
+                                                                  : "text-red-600"
+                                                          }`}
+                                                      >
+                                                          {Number(
+                                                              movement.quantity,
+                                                          ) > 0
+                                                              ? "+"
+                                                              : ""}
+                                                          {formatNumber(
+                                                              movement.quantity,
+                                                          )}
+                                                      </span>
+
+                                                      <span className="ml-1 text-xs text-muted-foreground">
+                                                          {movement.product
+                                                              ?.unit?.symbol ??
+                                                              ""}
+                                                      </span>
+                                                  </td>
+                                              </tr>
+                                          ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Total */}
+                        {transaction?.total_amount !== undefined && (
+                            <div className="mt-4 flex justify-end">
+                                <div className="w-full max-w-sm space-y-2 rounded-lg bg-muted/40 p-4">
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-muted-foreground">
+                                            Total Quantity
+                                        </span>
+
+                                        <span className="font-medium">
+                                            {formatNumber(
+                                                transaction.total_quantity,
+                                            )}
+                                        </span>
+                                    </div>
+
+                                    <div className="flex justify-between border-t pt-3">
+                                        <span className="font-medium">
+                                            Total
+                                        </span>
+
+                                        <span className="text-lg font-bold">
+                                            {formatCurrency(
+                                                transaction.total_amount,
+                                            )}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Movement Ledger */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Ledger Stock Movement</CardTitle>
+                    </CardHeader>
+
+                    <CardContent>
+                        <div className="overflow-x-auto rounded-lg border">
+                            <table className="w-full text-sm">
+                                <thead className="bg-muted/50">
+                                    <tr>
+                                        <th className="px-4 py-3 text-left">
+                                            Produk
+                                        </th>
+
+                                        <th className="px-4 py-3 text-left">
+                                            Jenis
+                                        </th>
+
+                                        <th className="px-4 py-3 text-right">
+                                            Quantity
+                                        </th>
+
+                                        <th className="px-4 py-3 text-left">
+                                            Supplier
+                                        </th>
+
                                         <th className="px-4 py-3 text-left">
                                             User
                                         </th>
+
                                         <th className="px-4 py-3 text-left">
-                                            Catatan
+                                            Waktu
                                         </th>
                                     </tr>
                                 </thead>
 
                                 <tbody>
-                                    {relatedMovements.map((item) => {
-                                        const Icon = movementIcon(
-                                            item.movement_type,
-                                        );
-                                        const quantity = parseNumber(
-                                            item.quantity,
-                                        );
+                                    {movements.map((movement) => (
+                                        <tr
+                                            key={movement.id}
+                                            className="border-t"
+                                        >
+                                            <td className="px-4 py-3">
+                                                <p className="font-medium">
+                                                    {movement.product?.name ??
+                                                        "-"}
+                                                </p>
 
-                                        return (
-                                            <tr
-                                                key={item.id}
-                                                className="border-t"
-                                            >
-                                                <td className="px-4 py-3 whitespace-nowrap">
-                                                    {formatDateTime(
-                                                        item.created_at,
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <p className="font-medium">
-                                                        {item.product?.name ??
-                                                            "-"}
-                                                    </p>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {item.product?.sku ??
-                                                            "-"}
-                                                    </p>
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <span className="inline-flex items-center gap-2">
-                                                        <Icon className="size-4" />
-                                                        {movementLabel(
-                                                            item.movement_type,
-                                                        )}
-                                                    </span>
-                                                </td>
-                                                <td
-                                                    className={`px-4 py-3 text-right font-semibold whitespace-nowrap ${quantityClass(
-                                                        item.movement_type,
-                                                        quantity,
+                                                <p className="text-xs text-muted-foreground">
+                                                    {movement.product?.sku ??
+                                                        "-"}
+                                                </p>
+                                            </td>
+
+                                            <td className="px-4 py-3">
+                                                <span
+                                                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs ${getMovementColor(
+                                                        movement.movement_type,
                                                     )}`}
                                                 >
-                                                    {quantity > 0 ? "+" : ""}
+                                                    {getMovementLabel(
+                                                        movement.movement_type,
+                                                    )}
+                                                </span>
+                                            </td>
+
+                                            <td className="px-4 py-3 text-right font-semibold tabular-nums">
+                                                <span
+                                                    className={
+                                                        Number(
+                                                            movement.quantity,
+                                                        ) >= 0
+                                                            ? "text-emerald-600"
+                                                            : "text-red-600"
+                                                    }
+                                                >
+                                                    {Number(movement.quantity) >
+                                                    0
+                                                        ? "+"
+                                                        : ""}
                                                     {formatNumber(
-                                                        quantity,
-                                                    )}{" "}
-                                                    {item.product?.unit
+                                                        movement.quantity,
+                                                    )}
+                                                </span>
+
+                                                <span className="ml-1 text-xs text-muted-foreground">
+                                                    {movement.product?.unit
                                                         ?.symbol ?? ""}
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    {item.user?.name ?? "-"}
-                                                </td>
-                                                <td className="px-4 py-3 text-muted-foreground">
-                                                    {item.notes || "-"}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
+                                                </span>
+                                            </td>
+
+                                            <td className="px-4 py-3 text-muted-foreground">
+                                                {movement.supplier?.name ?? "-"}
+                                            </td>
+
+                                            <td className="px-4 py-3 text-muted-foreground">
+                                                {movement.user?.name ?? "-"}
+                                            </td>
+
+                                            <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                                                {formatDate(
+                                                    movement.created_at,
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
                     </CardContent>
                 </Card>
 
+                {/* Footer */}
                 <div className="flex justify-end">
                     <Button
-                        type="button"
                         variant="outline"
                         onClick={() => router.visit("/inventory/movements")}
                     >
+                        <ArrowLeft className="mr-2 size-4" />
                         Kembali ke Stock Movement
                     </Button>
                 </div>

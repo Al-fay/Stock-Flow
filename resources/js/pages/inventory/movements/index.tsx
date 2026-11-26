@@ -149,18 +149,32 @@ export default function StockMovementIndex({
             {
                 accessorKey: "reference_number",
                 header: "Referensi",
-                cell: ({ row }) => (
-                    <div>
-                        <p className="font-medium">
-                            {row.original.reference_number ||
-                                `MOV-${row.original.id}`}
-                        </p>
+                cell: ({ row }) => {
+                    const reference =
+                        row.original.reference_number ||
+                        `MOV-${row.original.id}`;
+                    console.log("referencenya ", reference);
 
-                        <p className="text-xs text-muted-foreground">
-                            ID #{row.original.id}
-                        </p>
-                    </div>
-                ),
+                    return (
+                        <div>
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    router.visit(
+                                        `/inventory/movements/${encodeURIComponent(reference)}`,
+                                    )
+                                }
+                                className="font-medium text-primary hover:underline"
+                            >
+                                {reference}
+                            </button>
+
+                            <p className="text-xs text-muted-foreground">
+                                ID #{row.original.id}
+                            </p>
+                        </div>
+                    );
+                },
             },
             {
                 accessorKey: "product.name",
