@@ -9,8 +9,12 @@ use App\Models\StockOut;
 use App\Models\StockOutItem;
 use App\Models\StockReturn;
 use App\Models\StockReturnItem;
+use App\Services\Audit\AuditLogService;
+use App\Services\Notification\NotificationService;
+use App\Services\Notification\StockAlertNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
@@ -136,7 +140,6 @@ class StockReturnController extends Controller
             ->latest('transaction_date')
             ->get();
 
-
         $returnedQuantities = StockReturnItem::query()
             ->select(
                 'stock_out_item_id',
@@ -181,8 +184,12 @@ class StockReturnController extends Controller
         ]);
     }
 
-    public function store(Request $request)
-    {
+    public function store(
+        Request $request,
+        NotificationService $notificationService,
+        StockAlertNotificationService $stockAlertService,
+        AuditLogService $auditLogService
+    ) {
         $validated = $request->validate([
             'stock_out_id' => ['required', 'integer', 'exists:stock_outs,id'],
             'return_date' => ['required', 'date'],
@@ -217,9 +224,23 @@ class StockReturnController extends Controller
             ],
         ]);
 
-        $userId = $request->user()?->id;
+        $user = $request->user();
+        $userId = $user?->id;
 
-        $return = DB::transaction(function () use ($validated, $userId) {
+        /*
+        |--------------------------------------------------------------------------
+        | TRANSACTION
+        |--------------------------------------------------------------------------
+        | Seluruh proses retur, perubahan stok, Stock Movement,
+        | dan Audit Log tetap berada dalam database transaction.
+        |--------------------------------------------------------------------------
+        */
+
+        $return = DB::transaction(function () use (
+            $validated,
+            $userId,
+            $auditLogService
+        ) {
             // Lock header transaksi Stock Out.
             $stockOut = StockOut::query()
                 ->whereKey($validated['stock_out_id'])
@@ -256,6 +277,7 @@ class StockReturnController extends Controller
             }
 
             $returnItems = [];
+
             $totalQuantityMilli = 0;
             $totalRestockMilli = 0;
             $totalAmountCents = 0;
@@ -346,7 +368,12 @@ class StockReturnController extends Controller
                 'created_by' => $userId,
             ]);
 
-            // Lock products dalam urutan ID agar konsisten.
+            /*
+            |--------------------------------------------------------------------------
+            | Lock products dalam urutan ID agar konsisten.
+            |--------------------------------------------------------------------------
+            */
+
             $productIds = collect($returnItems)
                 ->pluck('product_id')
                 ->unique()
@@ -360,24 +387,15 @@ class StockReturnController extends Controller
                 ->get()
                 ->keyBy('id');
 
+            /*
+            |--------------------------------------------------------------------------
+            | Audit Detail Items
+            |--------------------------------------------------------------------------
+            */
+
+            $auditItems = [];
+
             foreach ($returnItems as $item) {
-                $stockReturnItem = $stockReturn->items()->create([
-                    'stock_out_item_id' => $item['stock_out_item_id'],
-                    'product_id' => $item['product_id'],
-                    'quantity' => $item['quantity_milli'] / 1000,
-                    'unit_price' => $item['unit_price_cents'] / 100,
-                    'subtotal' => $item['subtotal_cents'] / 100,
-                    'restock_quantity' => $item['restock_milli'] / 1000,
-                    'damaged_quantity' => $item['damaged_milli'] / 1000,
-                    'notes' => $item['notes'],
-                ]);
-
-                $restockMilli = $item['restock_milli'];
-
-                if ($restockMilli <= 0) {
-                    continue;
-                }
-
                 $product = $products->get($item['product_id']);
 
                 if (!$product) {
@@ -390,7 +408,130 @@ class StockReturnController extends Controller
                     (float) $product->stock * 1000
                 );
 
+                $restockMilli = $item['restock_milli'];
+
                 $newStockMilli = $currentStockMilli + $restockMilli;
+
+                /*
+                 * Simpan detail Stock Return.
+                 */
+                $stockReturnItem = $stockReturn->items()->create([
+                    'stock_out_item_id' => $item['stock_out_item_id'],
+                    'product_id' => $item['product_id'],
+
+                    'quantity' => number_format(
+                        $item['quantity_milli'] / 1000,
+                        3,
+                        '.',
+                        ''
+                    ),
+
+                    'unit_price' => number_format(
+                        $item['unit_price_cents'] / 100,
+                        2,
+                        '.',
+                        ''
+                    ),
+
+                    'subtotal' => number_format(
+                        $item['subtotal_cents'] / 100,
+                        2,
+                        '.',
+                        ''
+                    ),
+
+                    'restock_quantity' => number_format(
+                        $restockMilli / 1000,
+                        3,
+                        '.',
+                        ''
+                    ),
+
+                    'damaged_quantity' => number_format(
+                        $item['damaged_milli'] / 1000,
+                        3,
+                        '.',
+                        ''
+                    ),
+
+                    'notes' => $item['notes'],
+                ]);
+
+                /*
+                |--------------------------------------------------------------------------
+                | Audit item.
+                |--------------------------------------------------------------------------
+                | Tetap mencatat stok sebelum/sesudah walaupun barang
+                | retur sepenuhnya rusak dan tidak masuk stok.
+                |--------------------------------------------------------------------------
+                */
+
+                $auditItems[] = [
+                    'product_id' => $product->id,
+                    'sku' => $product->sku,
+                    'product_name' => $product->name,
+
+                    'return_quantity' => number_format(
+                        $item['quantity_milli'] / 1000,
+                        3,
+                        '.',
+                        ''
+                    ),
+
+                    'restock_quantity' => number_format(
+                        $restockMilli / 1000,
+                        3,
+                        '.',
+                        ''
+                    ),
+
+                    'damaged_quantity' => number_format(
+                        $item['damaged_milli'] / 1000,
+                        3,
+                        '.',
+                        ''
+                    ),
+
+                    'unit_price' => number_format(
+                        $item['unit_price_cents'] / 100,
+                        2,
+                        '.',
+                        ''
+                    ),
+
+                    'subtotal' => number_format(
+                        $item['subtotal_cents'] / 100,
+                        2,
+                        '.',
+                        ''
+                    ),
+
+                    'stock_before' => number_format(
+                        $currentStockMilli / 1000,
+                        3,
+                        '.',
+                        ''
+                    ),
+
+                    'stock_after' => number_format(
+                        $newStockMilli / 1000,
+                        3,
+                        '.',
+                        ''
+                    ),
+
+                    'notes' => $item['notes'],
+                ];
+
+                /*
+                |--------------------------------------------------------------------------
+                | Restock
+                |--------------------------------------------------------------------------
+                */
+
+                if ($restockMilli <= 0) {
+                    continue;
+                }
 
                 // Stock tidak dimasukkan ke fillable.
                 $product->stock = number_format(
@@ -402,24 +543,146 @@ class StockReturnController extends Controller
 
                 $product->save();
 
-                // Ledger hanya untuk barang layak masuk stok.
+                /*
+                 * Ledger hanya untuk barang layak masuk stok.
+                 */
                 StockMovement::create([
                     'product_id' => $product->id,
                     'supplier_id' => null,
                     'user_id' => $userId,
                     'movement_type' => 'RETURN',
-                    'quantity' => $restockMilli / 1000,
+
+                    'quantity' => number_format(
+                        $restockMilli / 1000,
+                        3,
+                        '.',
+                        ''
+                    ),
+
                     'reference_number' => $reference,
                     'notes' => "Retur dari Stock Out {$stockOut->reference_number}",
                 ]);
             }
 
+            /*
+            |--------------------------------------------------------------------------
+            | Audit Log: STOCK RETURN
+            |--------------------------------------------------------------------------
+            */
+
+            $auditLogService->log(
+                action: 'STOCK_RETURN',
+                module: 'INVENTORY',
+                description: "Stock Return {$reference} berhasil diposting",
+                auditable: $stockReturn,
+                newValues: [
+                    'reference_number' => $reference,
+                    'stock_out_reference' => $stockOut->reference_number,
+                    'return_date' => $validated['return_date'],
+
+                    'total_quantity' => number_format(
+                        $totalQuantityMilli / 1000,
+                        3,
+                        '.',
+                        ''
+                    ),
+
+                    'total_restock' => number_format(
+                        $totalRestockMilli / 1000,
+                        3,
+                        '.',
+                        ''
+                    ),
+
+                    'total_damaged' => number_format(
+                        ($totalQuantityMilli - $totalRestockMilli) / 1000,
+                        3,
+                        '.',
+                        ''
+                    ),
+
+                    'total_amount' => number_format(
+                        $totalAmountCents / 100,
+                        2,
+                        '.',
+                        ''
+                    ),
+
+                    'status' => 'POSTED',
+                ],
+                metadata: [
+                    'items' => $auditItems,
+                    'reason' => $validated['reason'] ?? null,
+                ],
+            );
+
             return $stockReturn;
         }, 3);
 
+        /*
+        |--------------------------------------------------------------------------
+        | NOTIFICATION: STOCK RETURN COMPLETED
+        |--------------------------------------------------------------------------
+        | Dijalankan setelah transaksi berhasil commit.
+        |--------------------------------------------------------------------------
+        */
+
+        try {
+            $notificationService->stockReturn(
+                $user,
+                $return->reference_number,
+                $return->id
+            );
+        } catch (\Throwable $e) {
+            Log::error('Stock Return notification failed.', [
+                'stock_return_id' => $return->id,
+                'reference_number' => $return->reference_number,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | STOCK ALERT RE-EVALUATION
+        |--------------------------------------------------------------------------
+        | Evaluasi hanya produk yang terlibat dalam transaksi retur.
+        |--------------------------------------------------------------------------
+        */
+
+        try {
+            $productIds = StockReturnItem::query()
+                ->where('stock_return_id', $return->id)
+                ->pluck('product_id')
+                ->unique();
+
+            $products = Product::query()
+                ->whereIn('id', $productIds)
+                ->get();
+
+            foreach ($products as $product) {
+                try {
+                    $stockAlertService->evaluateProduct($product);
+                } catch (\Throwable $e) {
+                    Log::error('Stock Return alert evaluation failed.', [
+                        'stock_return_id' => $return->id,
+                        'product_id' => $product->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::error('Stock Return alert evaluation process failed.', [
+                'stock_return_id' => $return->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         return redirect()
             ->route('inventory.stock-return.index')
-            ->with('success', "Retur {$return->reference_number} berhasil disimpan.");
+            ->with(
+                'success',
+                "Retur {$return->reference_number} berhasil disimpan."
+            );
     }
 
     public function show(string $reference)

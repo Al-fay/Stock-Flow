@@ -8,8 +8,12 @@ use App\Models\StockIn;
 use App\Models\StockInItem;
 use App\Models\StockMovement;
 use App\Models\Supplier;
+use App\Services\Audit\AuditLogService;
+use App\Services\Notification\NotificationService;
+use App\Services\Notification\StockAlertNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -48,11 +52,19 @@ class StockInController extends Controller
 
         // Date filter
         if (!empty($validated['start_date'])) {
-            $query->whereDate('transaction_date', '>=', $validated['start_date']);
+            $query->whereDate(
+                'transaction_date',
+                '>=',
+                $validated['start_date']
+            );
         }
 
         if (!empty($validated['end_date'])) {
-            $query->whereDate('transaction_date', '<=', $validated['end_date']);
+            $query->whereDate(
+                'transaction_date',
+                '<=',
+                $validated['end_date']
+            );
         }
 
         // Summary menggunakan filter yang sama
@@ -112,8 +124,12 @@ class StockInController extends Controller
         ]);
     }
 
-    public function store(Request $request)
-    {
+    public function store(
+        Request $request,
+        NotificationService $notificationService,
+        StockAlertNotificationService $stockAlertService,
+        AuditLogService $auditLogService
+    ) {
         $validated = $request->validate([
             'supplier_id' => [
                 'required',
@@ -165,7 +181,12 @@ class StockInController extends Controller
             ],
         ]);
 
-        $stockIn = DB::transaction(function () use ($request, $validated) {
+
+        $stockIn = DB::transaction(function () use (
+            $request,
+            $validated,
+            $auditLogService
+        ) {
             $referenceNumber = 'SI-'
                 . now()->format('YmdHis')
                 . '-'
@@ -186,6 +207,8 @@ class StockInController extends Controller
             $totalQuantityMilli = 0;
             $totalAmountCents = 0;
 
+            $auditItems = [];
+
             // Sort product IDs to reduce deadlock risk.
             $productIds = collect($validated['items'])
                 ->pluck('product_id')
@@ -201,7 +224,9 @@ class StockInController extends Controller
                 ->keyBy('id');
 
             foreach ($validated['items'] as $itemData) {
-                $product = $products->get((int) $itemData['product_id']);
+                $product = $products->get(
+                    (int) $itemData['product_id']
+                );
 
                 if (!$product || !$product->is_active) {
                     throw ValidationException::withMessages([
@@ -223,10 +248,15 @@ class StockInController extends Controller
                     ($quantityMilli * $unitCostCents) / 1000
                 );
 
-                $newStockMilli = (int) round(
+                // Stock before transaction
+                $stockBeforeMilli = (int) round(
                     (float) $product->stock * 1000
-                ) + $quantityMilli;
+                );
 
+                // Stock after transaction
+                $newStockMilli = $stockBeforeMilli + $quantityMilli;
+
+                // Update product stock
                 $product->update([
                     'stock' => number_format(
                         $newStockMilli / 1000,
@@ -236,6 +266,7 @@ class StockInController extends Controller
                     ),
                 ]);
 
+                // Create Stock In Item
                 StockInItem::create([
                     'stock_in_id' => $stockIn->id,
                     'product_id' => $product->id,
@@ -259,6 +290,7 @@ class StockInController extends Controller
                     ),
                 ]);
 
+                // Create Stock Movement
                 StockMovement::create([
                     'product_id' => $product->id,
                     'supplier_id' => $validated['supplier_id'],
@@ -274,10 +306,53 @@ class StockInController extends Controller
                     'notes' => $validated['notes'] ?? 'Stock In',
                 ]);
 
+
+                $auditItems[] = [
+                    'product_id' => $product->id,
+                    'sku' => $product->sku,
+                    'product_name' => $product->name,
+
+                    'quantity' => number_format(
+                        $quantityMilli / 1000,
+                        3,
+                        '.',
+                        ''
+                    ),
+
+                    'unit_cost' => number_format(
+                        $unitCostCents / 100,
+                        2,
+                        '.',
+                        ''
+                    ),
+
+                    'subtotal' => number_format(
+                        $subtotalCents / 100,
+                        2,
+                        '.',
+                        ''
+                    ),
+
+                    'stock_before' => number_format(
+                        $stockBeforeMilli / 1000,
+                        3,
+                        '.',
+                        ''
+                    ),
+
+                    'stock_after' => number_format(
+                        $newStockMilli / 1000,
+                        3,
+                        '.',
+                        ''
+                    ),
+                ];
+
                 $totalQuantityMilli += $quantityMilli;
                 $totalAmountCents += $subtotalCents;
             }
 
+            // Update Stock In header totals
             $stockIn->update([
                 'total_quantity' => number_format(
                     $totalQuantityMilli / 1000,
@@ -294,12 +369,83 @@ class StockInController extends Controller
                 ),
             ]);
 
+
+            $auditLogService->log(
+                action: 'STOCK_IN',
+                module: 'INVENTORY',
+                description: "Stock In {$referenceNumber} berhasil diposting",
+                auditable: $stockIn,
+                newValues: [
+                    'reference_number' => $referenceNumber,
+                    'supplier_id' => $validated['supplier_id'],
+                    'transaction_date' => $validated['transaction_date'],
+                    'payment_method' => $validated['payment_method'],
+
+                    'total_quantity' => number_format(
+                        $totalQuantityMilli / 1000,
+                        3,
+                        '.',
+                        ''
+                    ),
+
+                    'total_amount' => number_format(
+                        $totalAmountCents / 100,
+                        2,
+                        '.',
+                        ''
+                    ),
+
+                    'status' => 'POSTED',
+                ],
+                metadata: [
+                    'items' => $auditItems,
+                    'notes' => $validated['notes'] ?? null,
+                ],
+            );
+
             return $stockIn;
         }, 3);
 
+
+        try {
+            // Notify the user who created this transaction.
+            $user = $request->user();
+
+            if ($user) {
+                $notificationService->stockIn(
+                    $user,
+                    $stockIn->reference_number,
+                    $stockIn->id
+                );
+            }
+
+            // Evaluate stock alerts for affected products only.
+            $productIds = collect($validated['items'])
+                ->pluck('product_id')
+                ->unique()
+                ->values();
+
+            $products = Product::query()
+                ->whereIn('id', $productIds)
+                ->get();
+
+            foreach ($products as $product) {
+                $stockAlertService->evaluateProduct($product);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Stock In notification failed.', [
+                'stock_in_id' => $stockIn->id,
+                'reference_number' => $stockIn->reference_number,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         return redirect()
             ->route('inventory.stock-in.create')
-            ->with('success', "Stock In {$stockIn->reference_number} berhasil disimpan.");
+            ->with(
+                'success',
+                "Stock In {$stockIn->reference_number} berhasil disimpan."
+            );
     }
 
     public function show(string $reference)

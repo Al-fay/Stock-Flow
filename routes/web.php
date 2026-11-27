@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
+use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\RefreshTokenController;
 use App\Http\Controllers\Auth\RegisteredUserController;
@@ -21,6 +22,7 @@ use App\Http\Controllers\MasterData\ProductController;
 use App\Http\Controllers\MasterData\SupplierController;
 use App\Http\Controllers\MasterData\UnitController;
 use App\Http\Controllers\MasterData\WarehouseController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Middleware\JwtAuthenticate;
 use Illuminate\Support\Facades\Auth;
 
@@ -111,9 +113,18 @@ Route::middleware([JwtAuthenticate::class])->group(function () {
         Route::patch('products/{product}/status', [ProductController::class, 'updateStatus'])
             ->name('products.update-status');
 
+        Route::get('/products/{product}', [ProductController::class, 'show',])
+            ->name('products.show');
+
         Route::resource('products', ProductController::class)
             ->only(['index', 'store', 'update', 'destroy']);
     });
+
+    Route::get('/audit-logs', [AuditLogController::class, 'index'])
+        ->name('audit-logs.index');
+
+    Route::get('/audit-logs/{auditLog}', [AuditLogController::class, 'show'])
+        ->name('audit-logs.show');
 
     Route::get('/inventory', [InventoryController::class, 'index'])
         ->name('inventory.index');
@@ -214,6 +225,22 @@ Route::middleware([JwtAuthenticate::class])->group(function () {
 
             Route::get('/export/pdf', [InventoryReportController::class, 'exportPdf'])
                 ->name('export.pdf');
+        });
+
+    Route::prefix('notifications')
+        ->name('notifications.')
+        ->group(function () {
+            Route::get('/', [NotificationController::class, 'index'])
+                ->name('index');
+
+            Route::patch('/read-all', [NotificationController::class, 'markAllAsRead'])
+                ->name('read-all');
+
+            Route::patch('/{id}/read', [NotificationController::class, 'markAsRead'])
+                ->name('read');
+
+            Route::delete('/{id}', [NotificationController::class, 'destroy'])
+                ->name('destroy');
         });
 
     Route::post('/logout', [

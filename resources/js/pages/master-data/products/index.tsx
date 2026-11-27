@@ -395,6 +395,18 @@ export default function ProductsIndex({
                     <div className="flex items-center gap-2">
                         <button
                             type="button"
+                            onClick={() =>
+                                router.visit(
+                                    `/master-data/products/${row.original.id}`,
+                                )
+                            }
+                            className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted"
+                        >
+                            Detail
+                        </button>
+
+                        <button
+                            type="button"
                             onClick={() => openEditModal(row.original)}
                             className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted"
                         >

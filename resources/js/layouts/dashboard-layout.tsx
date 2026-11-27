@@ -18,6 +18,7 @@ import {
     LogOut,
     Monitor,
     ChevronUp,
+    ChevronDown,
     UserRound,
     HelpCircle,
     ArrowLeftRight,
@@ -32,6 +33,7 @@ import {
     ArrowDownFromLine,
     ChartNoAxesCombined,
 } from "lucide-react";
+
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -41,9 +43,11 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
 import { Toaster } from "@/components/ui/sonner";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import { SharedPropsUser } from "@/types/user";
+import NotificationDropdown from "@/components/my-components/notification-dropdown";
 
 type Theme = "light" | "dark" | "system";
 
@@ -59,7 +63,7 @@ const navigation = [
         ],
     },
     {
-        title: "Management",
+        title: "Inventory",
         items: [
             {
                 label: "Stock Overview",
@@ -101,6 +105,11 @@ const navigation = [
                 href: "/inventory/reports",
                 icon: ChartNoAxesCombined,
             },
+        ],
+    },
+    {
+        title: "Master Data",
+        items: [
             {
                 label: "Products",
                 href: "/master-data/products",
@@ -111,7 +120,11 @@ const navigation = [
                 href: "/master-data/categories",
                 icon: Tags,
             },
-            { label: "Units", href: "/master-data/units", icon: Ruler },
+            {
+                label: "Units",
+                href: "/master-data/units",
+                icon: Ruler,
+            },
             {
                 label: "Suppliers",
                 href: "/master-data/suppliers",
@@ -131,7 +144,13 @@ const navigation = [
     },
     {
         title: "System",
-        items: [{ label: "Reports", href: "/reports", icon: BarChart3 }],
+        items: [
+            {
+                label: "Reports",
+                href: "/reports",
+                icon: BarChart3,
+            },
+        ],
     },
 ];
 
@@ -141,22 +160,81 @@ export default function DashboardLayout({
     children: React.ReactNode;
 }) {
     useAutoRefresh();
+
     const { url } = usePage();
     const { auth } = usePage<SharedPropsUser>().props;
+
     const [desktopCollapsed, setDesktopCollapsed] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
+
     const [theme, setTheme] = useState<Theme>("system");
     const [mounted, setMounted] = useState(false);
-    const [showNotifications, setShowNotifications] = useState(false);
 
-    const initial = auth.user?.name
-        .split(" ")
-        .map((word) => word[0])
-        .join("")
-        .substring(0, 2)
-        .toUpperCase();
+    const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+        Overview: true,
+        Inventory: true,
+        "Master Data": false,
+        System: false,
+    });
 
-    // Initialize saved theme
+    // =========================================================
+    // ACTIVE MENU
+    // =========================================================
+
+    const isActiveMenu = (href: string) => {
+        if (href === "/") {
+            return url === "/";
+        }
+
+        // Exact match untuk halaman Inventory
+        if (href === "/inventory") {
+            return url === "/inventory";
+        }
+
+        return url === href || url.startsWith(`${href}/`);
+    };
+
+    // =========================================================
+    // DROPDOWN GROUP
+    // =========================================================
+
+    const toggleGroup = (title: string) => {
+        setOpenGroups((prev) => ({
+            ...prev,
+            [title]: !prev[title],
+        }));
+    };
+
+    // Automatically open active group
+    useEffect(() => {
+        const activeGroup = navigation.find((group) =>
+            group.items.some((item) => isActiveMenu(item.href)),
+        );
+
+        if (activeGroup) {
+            setOpenGroups((prev) => ({
+                ...prev,
+                [activeGroup.title]: true,
+            }));
+        }
+    }, [url]);
+
+    // =========================================================
+    // USER INITIAL
+    // =========================================================
+
+    const initial =
+        auth.user?.name
+            ?.split(" ")
+            .map((word) => word[0])
+            .join("")
+            .substring(0, 2)
+            .toUpperCase() ?? "US";
+
+    // =========================================================
+    // INITIALIZE THEME
+    // =========================================================
+
     useEffect(() => {
         const savedTheme = localStorage.getItem(
             "inventory-theme",
@@ -173,7 +251,10 @@ export default function DashboardLayout({
         setMounted(true);
     }, []);
 
-    // Apply theme
+    // =========================================================
+    // APPLY THEME
+    // =========================================================
+
     useEffect(() => {
         if (!mounted) return;
 
@@ -204,12 +285,18 @@ export default function DashboardLayout({
         };
     }, [theme, mounted]);
 
-    // Close mobile sidebar on navigation
+    // =========================================================
+    // CLOSE MOBILE SIDEBAR AFTER NAVIGATION
+    // =========================================================
+
     useEffect(() => {
         setMobileOpen(false);
     }, [url]);
 
-    // Prevent background scrolling when mobile sidebar is open
+    // =========================================================
+    // PREVENT BACKGROUND SCROLL ON MOBILE
+    // =========================================================
+
     useEffect(() => {
         document.body.style.overflow = mobileOpen ? "hidden" : "";
 
@@ -218,10 +305,15 @@ export default function DashboardLayout({
         };
     }, [mobileOpen]);
 
+    // =========================================================
+    // THEME
+    // =========================================================
+
     const cycleTheme = () => {
         setTheme((current) => {
             if (current === "light") return "dark";
             if (current === "dark") return "system";
+
             return "light";
         });
     };
@@ -232,13 +324,24 @@ export default function DashboardLayout({
               window.matchMedia("(prefers-color-scheme: dark)").matches)
         : false;
 
+    // =========================================================
+    // LOGOUT
+    // =========================================================
+
     const handleLogout = () => {
         router.post("/logout");
     };
 
+    // =========================================================
+    // RENDER
+    // =========================================================
+
     return (
         <div className="min-h-screen bg-background text-foreground">
-            {/* Mobile overlay */}
+            {/* ================================================= */}
+            {/* MOBILE OVERLAY                                     */}
+            {/* ================================================= */}
+
             {mobileOpen && (
                 <button
                     type="button"
@@ -248,12 +351,16 @@ export default function DashboardLayout({
                 />
             )}
 
-            {/* Sidebar */}
+            {/* ================================================= */}
+            {/* SIDEBAR                                            */}
+            {/* ================================================= */}
+
             <aside
                 className={`
-                    fixed inset-y-0 left-0 z-50 flex flex-col
-                    border-r border-sidebar-border bg-sidebar
-                    text-sidebar-foreground
+                    fixed inset-y-0 left-0 z-50
+                    flex flex-col
+                    border-r border-sidebar-border
+                    bg-sidebar text-sidebar-foreground
                     transition-all duration-300 ease-in-out
                     w-72
                     ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
@@ -261,27 +368,33 @@ export default function DashboardLayout({
                     ${desktopCollapsed ? "md:w-20" : "md:w-64"}
                 `}
             >
-                {/* Logo */}
+                {/* LOGO */}
                 <div className="flex h-16 shrink-0 items-center justify-between border-b border-sidebar-border px-5">
                     <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex size-9 shrink-0 shadow-sm">
-                            <img src="/warehouse.svg" alt="logo" />
+                        <div className="flex size-9 shrink-0 items-center justify-center">
+                            <img
+                                src="/warehouse.svg"
+                                alt="Inventory logo"
+                                className="size-9"
+                            />
                         </div>
 
                         {(!desktopCollapsed || mobileOpen) && (
                             <div className="min-w-0">
                                 <h2 className="truncate font-bold tracking-tight">
-                                    Inventory
+                                    Stock-Flow
                                 </h2>
+
                                 <p className="text-xs text-muted-foreground">
-                                    Management System
+                                    Inventory Management
                                 </p>
                             </div>
                         )}
                     </div>
 
-                    {/* Close mobile */}
+                    {/* MOBILE CLOSE */}
                     <button
+                        type="button"
                         onClick={() => setMobileOpen(false)}
                         className="rounded-lg p-2 hover:bg-sidebar-accent md:hidden"
                         aria-label="Close sidebar"
@@ -290,67 +403,158 @@ export default function DashboardLayout({
                     </button>
                 </div>
 
-                {/* Navigation */}
-                <nav className="flex-1 space-y-6 overflow-y-auto p-4">
-                    {navigation.map((group) => (
-                        <div key={group.title}>
-                            {(!desktopCollapsed || mobileOpen) && (
-                                <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                                    {group.title}
-                                </p>
-                            )}
+                {/* ================================================= */}
+                {/* NAVIGATION DROPDOWN                                 */}
+                {/* ================================================= */}
 
-                            <div className="space-y-1">
-                                {group.items.map((item) => {
-                                    const Icon = item.icon;
-                                    const active =
-                                        item.href === "/"
-                                            ? url === "/"
-                                            : item.href === "/inventory"
-                                              ? url === "/inventory"
-                                              : url === item.href ||
-                                                url.startsWith(item.href + "/");
+                <nav className="flex-1 space-y-3 overflow-y-auto p-3">
+                    {navigation.map((group) => {
+                        const isOpen = openGroups[group.title] ?? false;
 
-                                    return (
-                                        <Link
-                                            key={item.label}
-                                            href={item.href}
-                                            title={
-                                                desktopCollapsed && !mobileOpen
-                                                    ? item.label
-                                                    : undefined
+                        const hasActiveItem = group.items.some((item) =>
+                            isActiveMenu(item.href),
+                        );
+
+                        const collapsed = desktopCollapsed && !mobileOpen;
+
+                        return (
+                            <div key={group.title}>
+                                {/* GROUP HEADER */}
+                                <button
+                                    type="button"
+                                    onClick={() => toggleGroup(group.title)}
+                                    className={`
+                                        flex w-full items-center
+                                        rounded-lg px-3 py-2
+                                        text-[11px] font-semibold
+                                        uppercase tracking-widest
+                                        transition-colors
+                                        ${
+                                            hasActiveItem
+                                                ? "text-primary"
+                                                : "text-muted-foreground"
+                                        }
+                                        hover:bg-sidebar-accent
+                                        hover:text-sidebar-accent-foreground
+                                        ${
+                                            collapsed
+                                                ? "md:justify-center md:px-2"
+                                                : "justify-between"
+                                        }
+                                    `}
+                                    title={collapsed ? group.title : undefined}
+                                >
+                                    {!collapsed && <span>{group.title}</span>}
+
+                                    <ChevronDown
+                                        className={`
+                                            size-4 shrink-0
+                                            transition-transform duration-200
+                                            ${
+                                                isOpen
+                                                    ? "rotate-180"
+                                                    : "rotate-0"
                                             }
+                                            ${collapsed ? "hidden" : ""}
+                                        `}
+                                    />
+                                </button>
+
+                                {/* GROUP ITEMS */}
+                                <div
+                                    className={`
+                                        grid transition-all duration-300
+                                        ${
+                                            isOpen || collapsed
+                                                ? "grid-rows-[1fr] opacity-100"
+                                                : "grid-rows-[0fr] opacity-0"
+                                        }
+                                    `}
+                                >
+                                    <div className="overflow-hidden">
+                                        <div
                                             className={`
-                                                flex items-center gap-3 rounded-xl
-                                                px-3 py-2.5 text-sm font-medium
-                                                transition-all duration-200
-                                                ${
-                                                    active
-                                                        ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
-                                                        : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                                                }
+                                                mt-1 space-y-1
+                                                ${collapsed ? "" : "pl-1"}
                                             `}
                                         >
-                                            <Icon className="size-[18px] shrink-0" />
+                                            {group.items.map((item) => {
+                                                const Icon = item.icon;
 
-                                            {(!desktopCollapsed ||
-                                                mobileOpen) && (
-                                                <span>{item.label}</span>
-                                            )}
-                                        </Link>
-                                    );
-                                })}
+                                                const active = isActiveMenu(
+                                                    item.href,
+                                                );
+
+                                                return (
+                                                    <Link
+                                                        key={item.label}
+                                                        href={item.href}
+                                                        title={
+                                                            collapsed
+                                                                ? item.label
+                                                                : undefined
+                                                        }
+                                                        className={`
+                                                                flex items-center gap-3
+                                                                rounded-xl px-3 py-2.5
+                                                                text-sm font-medium
+                                                                transition-all duration-200
+                                                                ${
+                                                                    collapsed
+                                                                        ? "md:justify-center md:px-2"
+                                                                        : ""
+                                                                }
+                                                                ${
+                                                                    active
+                                                                        ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
+                                                                        : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                                                                }
+                                                            `}
+                                                    >
+                                                        <Icon className="size-[18px] shrink-0" />
+
+                                                        {(!desktopCollapsed ||
+                                                            mobileOpen) && (
+                                                            <span className="truncate">
+                                                                {item.label}
+                                                            </span>
+                                                        )}
+                                                    </Link>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </nav>
 
-                {/* User Profile Dropdown */}
+                {/* ================================================= */}
+                {/* USER PROFILE DROPDOWN                              */}
+                {/* ================================================= */}
+
                 <div className="shrink-0 border-t border-sidebar-border p-3">
                     <DropdownMenu>
-                        <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-xl p-2 text-left outline-none transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring">
-                            {/* Avatar */}
-                            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                        <DropdownMenuTrigger
+                            className="
+                                flex w-full items-center gap-3
+                                rounded-xl p-2 text-left
+                                outline-none transition-colors
+                                hover:bg-sidebar-accent
+                                focus-visible:ring-2
+                                focus-visible:ring-sidebar-ring
+                            "
+                        >
+                            {/* AVATAR */}
+                            <div
+                                className="
+                                    flex size-10 shrink-0
+                                    items-center justify-center
+                                    rounded-full bg-primary/10
+                                    text-sm font-bold text-primary
+                                "
+                            >
                                 {initial}
                             </div>
 
@@ -377,11 +581,18 @@ export default function DashboardLayout({
                             sideOffset={8}
                             className="w-64"
                         >
-                            {/* Account Information */}
+                            {/* ACCOUNT INFORMATION */}
                             <DropdownMenuGroup>
                                 <DropdownMenuLabel>
                                     <div className="flex items-center gap-3 py-1">
-                                        <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 font-bold text-primary">
+                                        <div
+                                            className="
+                                                flex size-10
+                                                items-center justify-center
+                                                rounded-full bg-primary/10
+                                                font-bold text-primary
+                                            "
+                                        >
                                             {initial}
                                         </div>
 
@@ -389,6 +600,7 @@ export default function DashboardLayout({
                                             <p className="truncate text-sm font-semibold">
                                                 {auth.user?.name}
                                             </p>
+
                                             <p className="truncate text-xs text-muted-foreground">
                                                 {auth.user?.email}
                                             </p>
@@ -399,7 +611,7 @@ export default function DashboardLayout({
 
                             <DropdownMenuSeparator />
 
-                            {/* Account Menu */}
+                            {/* PROFILE */}
                             <DropdownMenuGroup>
                                 <DropdownMenuItem
                                     onClick={() => router.visit("/profile")}
@@ -411,7 +623,7 @@ export default function DashboardLayout({
 
                             <DropdownMenuSeparator />
 
-                            {/* Appearance */}
+                            {/* APPEARANCE */}
                             <DropdownMenuGroup>
                                 <DropdownMenuLabel>
                                     Appearance
@@ -433,7 +645,7 @@ export default function DashboardLayout({
 
                             <DropdownMenuSeparator />
 
-                            {/* Support */}
+                            {/* SUPPORT */}
                             <DropdownMenuGroup>
                                 <DropdownMenuItem
                                     onClick={() => router.visit("/help")}
@@ -445,11 +657,11 @@ export default function DashboardLayout({
 
                             <DropdownMenuSeparator />
 
-                            {/* Logout */}
+                            {/* LOGOUT */}
                             <DropdownMenuGroup>
                                 <DropdownMenuItem
                                     variant="destructive"
-                                    onClick={() => handleLogout()}
+                                    onClick={handleLogout}
                                 >
                                     <LogOut className="mr-2 size-4" />
                                     Log Out
@@ -460,41 +672,66 @@ export default function DashboardLayout({
                 </div>
             </aside>
 
-            {/* Main content */}
+            {/* ================================================= */}
+            {/* MAIN CONTENT                                        */}
+            {/* ================================================= */}
+
             <div
                 className={`
                     min-h-screen transition-[margin] duration-300
                     ${desktopCollapsed ? "md:ml-20" : "md:ml-64"}
                 `}
             >
-                {/* Header */}
-                <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/85 px-4 backdrop-blur-xl sm:px-6">
+                {/* HEADER */}
+                <header
+                    className="
+                        sticky top-0 z-30
+                        flex h-16 items-center justify-between
+                        border-b bg-background/85
+                        px-4 backdrop-blur-xl
+                        sm:px-6
+                    "
+                >
                     <div className="flex items-center gap-3">
-                        {/* Mobile menu */}
+                        {/* MOBILE MENU */}
                         <button
+                            type="button"
                             onClick={() => setMobileOpen(true)}
-                            className="rounded-lg p-2 transition-colors hover:bg-muted md:hidden"
+                            className="
+                                rounded-lg p-2
+                                transition-colors
+                                hover:bg-muted md:hidden
+                            "
                             aria-label="Open sidebar"
                         >
                             <Menu className="size-5" />
                         </button>
 
-                        {/* Collapse desktop */}
+                        {/* DESKTOP COLLAPSE */}
                         <button
+                            type="button"
                             onClick={() =>
                                 setDesktopCollapsed(!desktopCollapsed)
                             }
-                            className="hidden rounded-lg p-2 hover:bg-sidebar-accent md:block"
+                            className="
+                                hidden rounded-lg p-2
+                                hover:bg-sidebar-accent md:block
+                            "
                             aria-label="Toggle sidebar"
                         >
                             <ChevronLeft
-                                className={`size-4 transition-transform ${
-                                    desktopCollapsed ? "rotate-180" : ""
-                                }`}
+                                className={`
+                                    size-4 transition-transform
+                                    ${desktopCollapsed ? "rotate-180" : ""}
+                                `}
                             />
                         </button>
 
-                        {/* <div className="hidden items-center gap-2 rounded-xl border bg-muted/30 px-3 py-2 sm:flex">
+                        {/* SEARCH DESKTOP */}
+                        {/* Uncomment jika search sudah difungsikan */}
+
+                        {/* 
+                        <div className="hidden items-center gap-2 rounded-xl border bg-muted/30 px-3 py-2 sm:flex">
                             <Search className="size-4 text-muted-foreground" />
 
                             <input
@@ -505,112 +742,56 @@ export default function DashboardLayout({
                             <kbd className="hidden rounded border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground lg:inline-block">
                                 Ctrl K
                             </kbd>
-                        </div> */}
+                        </div>
+                        */}
                     </div>
 
+                    {/* HEADER ACTIONS */}
                     <div className="flex items-center gap-2 sm:gap-3">
-                        {/* Mobile search */}
+                        {/* MOBILE SEARCH */}
                         <button
+                            type="button"
                             className="rounded-lg p-2 hover:bg-muted sm:hidden"
                             aria-label="Search"
                         >
                             <Search className="size-5" />
                         </button>
 
-                        {/* Theme toggle */}
-                        <div className="flex items-center gap-1">
-                            <button
-                                onClick={cycleTheme}
-                                title={`Theme: ${theme}`}
-                                aria-label={`Change theme, currently ${theme}`}
-                                className="flex size-9 items-center justify-center rounded-xl border transition-colors hover:bg-muted"
-                            >
-                                {!mounted ? (
-                                    <Monitor className="size-4" />
-                                ) : theme === "system" ? (
-                                    <Monitor className="size-4" />
-                                ) : isDark ? (
-                                    <Moon className="size-4" />
-                                ) : (
-                                    <Sun className="size-4" />
-                                )}
-                            </button>
-                        </div>
-
-                        {/* Notifications */}
+                        {/* THEME TOGGLE */}
                         <button
-                            onClick={() =>
-                                setShowNotifications(!showNotifications)
-                            }
-                            className="relative flex size-9 items-center justify-center rounded-xl border transition-colors hover:bg-muted"
-                            aria-label="Notifications"
+                            type="button"
+                            onClick={cycleTheme}
+                            title={`Theme: ${theme}`}
+                            aria-label={`Change theme, currently ${theme}`}
+                            className="
+                                flex size-9 items-center justify-center
+                                rounded-xl border transition-colors
+                                hover:bg-muted
+                            "
                         >
-                            <Bell className="size-4" />
-                            <span className="absolute right-2 top-2 size-2 rounded-full border-2 border-background bg-red-500" />
+                            {!mounted ? (
+                                <Monitor className="size-4" />
+                            ) : theme === "system" ? (
+                                <Monitor className="size-4" />
+                            ) : isDark ? (
+                                <Moon className="size-4" />
+                            ) : (
+                                <Sun className="size-4" />
+                            )}
                         </button>
 
-                        {showNotifications && (
-                            <div className="absolute right-0 top-12 z-50 w-80 overflow-hidden rounded-xl border bg-background shadow-xl">
-                                <div className="flex items-center justify-between border-b p-4">
-                                    <h3 className="font-semibold">
-                                        Notifikasi
-                                    </h3>
-                                    <span className="text-xs text-muted-foreground">
-                                        2 baru
-                                    </span>
-                                </div>
-
-                                <div className="divide-y">
-                                    <div className="flex gap-3 p-4 hover:bg-muted/50">
-                                        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
-                                            <Info size={18} />
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-medium">
-                                                Informasi terbaru
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">
-                                                Ada informasi baru untuk kamu.
-                                            </p>
-                                            <span className="text-xs text-muted-foreground">
-                                                Baru saja
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex gap-3 p-4 hover:bg-muted/50">
-                                        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-600">
-                                            <Check size={18} />
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-medium">
-                                                Berhasil disimpan
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">
-                                                Data berhasil diperbarui.
-                                            </p>
-                                            <span className="text-xs text-muted-foreground">
-                                                5 menit lalu
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <button
-                                    onClick={() => setShowNotifications(false)}
-                                    className="w-full border-t p-3 text-center text-sm font-medium hover:bg-muted"
-                                >
-                                    Tutup notifikasi
-                                </button>
-                            </div>
-                        )}
+                        {/* NOTIFICATIONS */}
+                        <div className="relative">
+                            <NotificationDropdown />
+                        </div>
                     </div>
                 </header>
 
-                {/* Page */}
+                {/* PAGE CONTENT */}
                 <main className="min-w-0 p-4 sm:p-6 lg:p-8">{children}</main>
             </div>
 
+            {/* TOASTER */}
             <Toaster position="top-right" richColors closeButton />
         </div>
     );

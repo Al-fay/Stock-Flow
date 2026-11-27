@@ -295,7 +295,6 @@ class InventoryReportController extends Controller
 
         $netMovement = $movements->sum('quantity');
 
-
         $pdf = Pdf::loadView('reports.inventory.inventory-reports', [
             'products' => $products,
             'movements' => $movements,
@@ -318,6 +317,29 @@ class InventoryReportController extends Controller
         ]);
 
         $pdf->setPaper('A4', 'landscape');
+
+        $pdf->render();
+
+        $canvas = $pdf->getCanvas();
+        $fontMetrics = $pdf->getFontMetrics();
+
+        $font = $fontMetrics->getFont('DejaVu Sans', 'normal');
+
+        $pdf->render();
+
+        $canvas = $pdf->getCanvas();
+        $fontMetrics = $pdf->getFontMetrics();
+
+        $font = $fontMetrics->getFont('DejaVu Sans', 'normal');
+
+        $canvas->page_text(
+            $canvas->get_width() - 110,
+            $canvas->get_height() - 25,
+            "Page {PAGE_NUM} of {PAGE_COUNT}",
+            $font,
+            9,
+            [51, 51, 51]
+        );
 
         return $pdf->download(
             'inventory-reports-' . now()->format('Y-m-d_H-i-s') . '.pdf'

@@ -7,9 +7,12 @@ use App\Models\Product;
 use App\Models\StockMovement;
 use App\Models\StockOut;
 use App\Models\StockOutItem;
-use App\Models\User;
+use App\Services\Audit\AuditLogService;
+use App\Services\Notification\NotificationService;
+use App\Services\Notification\StockAlertNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
@@ -45,11 +48,19 @@ class StockOutController extends Controller
         }
 
         if (!empty($filters['start_date'])) {
-            $query->whereDate('transaction_date', '>=', $filters['start_date']);
+            $query->whereDate(
+                'transaction_date',
+                '>=',
+                $filters['start_date']
+            );
         }
 
         if (!empty($filters['end_date'])) {
-            $query->whereDate('transaction_date', '<=', $filters['end_date']);
+            $query->whereDate(
+                'transaction_date',
+                '<=',
+                $filters['end_date']
+            );
         }
 
         $perPage = $filters['per_page'] ?? 10;
@@ -137,8 +148,12 @@ class StockOutController extends Controller
         ]);
     }
 
-    public function store(Request $request)
-    {
+    public function store(
+        Request $request,
+        NotificationService $notificationService,
+        StockAlertNotificationService $stockAlertService,
+        AuditLogService $auditLogService
+    ) {
         $validated = $request->validate([
             'transaction_date' => [
                 'required',
@@ -190,9 +205,16 @@ class StockOutController extends Controller
             ],
         ]);
 
+        /*
+        |--------------------------------------------------------------------------
+        | Database Transaction
+        |--------------------------------------------------------------------------
+        */
+
         $stockOut = DB::transaction(function () use (
             $validated,
-            $request
+            $request,
+            $auditLogService
         ) {
             $items = $validated['items'];
 
@@ -235,6 +257,9 @@ class StockOutController extends Controller
 
             $totalQuantityMilli = 0;
             $totalAmountCents = 0;
+
+            // Menyimpan detail produk untuk Audit Log.
+            $auditItems = [];
 
             foreach ($items as $item) {
                 $productId = (int) $item['product_id'];
@@ -335,6 +360,53 @@ class StockOutController extends Controller
                     'notes' => $validated['notes'] ?? null,
                 ]);
 
+                /*
+                 |--------------------------------------------------------------------------
+                 | Audit Item
+                 |--------------------------------------------------------------------------
+                 */
+
+                $auditItems[] = [
+                    'product_id' => $product->id,
+                    'sku' => $product->sku,
+                    'product_name' => $product->name,
+
+                    'quantity' => number_format(
+                        $quantityMilli / 1000,
+                        3,
+                        '.',
+                        ''
+                    ),
+
+                    'unit_price' => number_format(
+                        $unitPriceCents / 100,
+                        2,
+                        '.',
+                        ''
+                    ),
+
+                    'subtotal' => number_format(
+                        $subtotalCents / 100,
+                        2,
+                        '.',
+                        ''
+                    ),
+
+                    'stock_before' => number_format(
+                        $currentStockMilli / 1000,
+                        3,
+                        '.',
+                        ''
+                    ),
+
+                    'stock_after' => number_format(
+                        $newStockMilli / 1000,
+                        3,
+                        '.',
+                        ''
+                    ),
+                ];
+
                 $totalQuantityMilli += $quantityMilli;
                 $totalAmountCents += $subtotalCents;
             }
@@ -346,6 +418,7 @@ class StockOutController extends Controller
                     '.',
                     ''
                 ),
+
                 'total_amount' => number_format(
                     $totalAmountCents / 100,
                     2,
@@ -354,8 +427,94 @@ class StockOutController extends Controller
                 ),
             ]);
 
+            /*
+            |--------------------------------------------------------------------------
+            | Audit Log
+            |--------------------------------------------------------------------------
+            */
+
+            $auditLogService->log(
+                action: 'STOCK_OUT',
+                module: 'INVENTORY',
+                description: "Stock Out {$reference} berhasil diposting",
+                auditable: $stockOut,
+                newValues: [
+                    'reference_number' => $reference,
+                    'transaction_date' => $validated['transaction_date'],
+                    'transaction_type' => $validated['transaction_type'],
+                    'destination' => $validated['destination'] ?? null,
+
+                    'total_quantity' => number_format(
+                        $totalQuantityMilli / 1000,
+                        3,
+                        '.',
+                        ''
+                    ),
+
+                    'total_amount' => number_format(
+                        $totalAmountCents / 100,
+                        2,
+                        '.',
+                        ''
+                    ),
+
+                    'status' => 'POSTED',
+                ],
+                metadata: [
+                    'items' => $auditItems,
+                    'notes' => $validated['notes'] ?? null,
+                ],
+            );
+
             return $stockOut;
         }, 3);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Notifications AFTER transaction committed
+        |--------------------------------------------------------------------------
+        */
+
+        // 1. Notify transaction creator.
+        try {
+            $user = $request->user();
+
+            if ($user) {
+                $notificationService->stockOut(
+                    $user,
+                    $stockOut->reference_number,
+                    $stockOut->id
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::error('Stock Out transaction notification failed.', [
+                'stock_out_id' => $stockOut->id,
+                'reference_number' => $stockOut->reference_number,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // 2. Evaluate alerts for affected products.
+        $productIds = collect($validated['items'])
+            ->pluck('product_id')
+            ->unique()
+            ->values();
+
+        $products = Product::query()
+            ->whereIn('id', $productIds)
+            ->get();
+
+        foreach ($products as $product) {
+            try {
+                $stockAlertService->evaluateProduct($product);
+            } catch (\Throwable $e) {
+                Log::error('Stock Out stock alert evaluation failed.', [
+                    'stock_out_id' => $stockOut->id,
+                    'product_id' => $product->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
 
         return redirect()
             ->route('inventory.stock-out.create')

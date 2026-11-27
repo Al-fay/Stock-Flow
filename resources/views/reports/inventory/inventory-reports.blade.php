@@ -8,18 +8,13 @@
 
     <style>
         @page {
-            margin: 30px 25px 45px;
+            margin: 25px 25px 45px 25px;
         }
 
         body {
             font-family: DejaVu Sans, sans-serif;
             font-size: 9px;
             color: #1f2937;
-        }
-
-        .report-header {
-            text-align: center;
-            margin-bottom: 20px;
         }
 
         .company-name {
@@ -29,15 +24,24 @@
             margin-bottom: 5px;
         }
 
+        .report-header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #635bff;
+        }
+
         .report-title {
-            font-size: 18px;
+            font-size: 20px;
             font-weight: bold;
-            margin-bottom: 6px;
+            color: #111827;
+            margin-bottom: 8px;
         }
 
         .report-subtitle {
             color: #6b7280;
             font-size: 9px;
+            line-height: 1.6;
         }
 
         .summary-grid {
@@ -93,6 +97,14 @@
             background: #f9fafb;
         }
 
+        tfoot {
+            display: table-footer-group;
+        }
+
+        tr {
+            page-break-inside: avoid;
+        }
+
         .text-center {
             text-align: center;
         }
@@ -143,9 +155,12 @@
             bottom: -25px;
             left: 0;
             right: 0;
+            height: 25px;
+            font-size: 9px;
+            color: #64748b;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 6px;
             text-align: center;
-            font-size: 8px;
-            color: #9ca3af;
         }
 
         .muted {
@@ -162,9 +177,7 @@
 
 <body>
 
-    {{-- ========================================================= --}}
     {{-- STOCK SUMMARY --}}
-    {{-- ========================================================= --}}
 
     <div class="report-header">
         <div class="company-name">
@@ -523,7 +536,8 @@
     {{-- Footer --}}
 
     <div class="footer">
-        Stock-Flow Inventory Reports | Generated {{ $generatedAt->format('d/m/Y H:i') }}
+        Stock-Flow Inventory Reports
+        | Generated {{ $generatedAt->format('d/m/Y H:i') }}
     </div>
 
 </body>
